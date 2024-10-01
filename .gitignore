@@ -1,0 +1,5 @@
+*
+!*/
+!generator/*.jl
+!.gitignore
+!README.md
