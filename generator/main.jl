@@ -144,7 +144,7 @@ end
 
 function gen_matvec(cny, coor)
     # material properties
-    young = 1000.0
+    young = 10.0
     nyu = 0.3
     lam = young * nyu / (1.0 + nyu) / (1.0 - 2.0 * nyu)
     mu = young / 2.0 / (1.0 + nyu)
@@ -302,6 +302,14 @@ function gen_matvec(cny, coor)
     kglobal_diag = zeros(Float64, 3 * nnode)
     kglobal_diag_inv = zeros(Float64, 3 * nnode)
 
+    # inpulse force
+    for inode in 1:nnode
+        x, y, z = coor[:, inode]
+        if norm([x, y, z] .- [1.0, 1.0, 4.0]) < 1.0e-6
+            fglobal[3*(inode-1)+3] = -1.0
+        end
+    end
+
     # boundary conditions
     bcflag = zeros(Bool, 3 * nnode)
     uglobal = zeros(Float64, 3 * nnode)
@@ -314,15 +322,6 @@ function gen_matvec(cny, coor)
             uglobal[3*(inode-1)+1] = 0.0
             uglobal[3*(inode-1)+2] = 0.0
             uglobal[3*(inode-1)+3] = 0.0
-        end
-
-        if abs(z - 4.0) < 1.0e-6
-            bcflag[3*(inode-1)+1] = true
-            bcflag[3*(inode-1)+2] = true
-            bcflag[3*(inode-1)+3] = true
-            uglobal[3*(inode-1)+1] = 0.0
-            uglobal[3*(inode-1)+2] = 0.0
-            uglobal[3*(inode-1)+3] = 1.0
         end
     end
 
