@@ -2,14 +2,7 @@ using DelimitedFiles
 using WriteVTK
 using LinearAlgebra
 
-function gen_model()
-    ds = 0.2
-    xmin = 0.0
-    xmax = 2.0
-    ymin = 0.0
-    ymax = 2.0
-    zmin = 0.0
-    zmax = 4.0
+function gen_model(ds, xmin, xmax, ymin, ymax, zmin, zmax)
 
     # number of elements in each direction
     mx = Int((xmax - xmin) / ds)
@@ -142,7 +135,13 @@ function ConjugateGradient!(amat_val, amat_col, amat_ind, amat_diag_inv, uvec, b
     end
 end
 
-function gen_matvec(cny, coor)
+function gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax)
+
+    # nblock for block conjugate gradient
+    # nblock needs to be square of an integer
+    mblock = 4
+    nblock = mblock * mblock
+
     # material properties
     young = 10.0
     nyu = 0.3
@@ -153,8 +152,6 @@ function gen_matvec(cny, coor)
     nelement = size(cny, 2)
     kglobal_tmp_val = [[] for _ in 1:3*nnode]
     kglobal_tmp_col = [[] for _ in 1:3*nnode]
-    fglobal = zeros(Float64, 3 * nnode)
-    uglobal = zeros(Float64, 3 * nnode)
 
     for ie = 1:nelement
         node_id = zeros(Int, 8)
@@ -265,7 +262,7 @@ function gen_matvec(cny, coor)
                     dmat[3, 1] = lam
                     dmat[3, 2] = lam
 
-                    kelement .+= transpose(bmat) * dmat * bmat * jac
+                    kelement .+= transpose(bmat) * dmat * bmat .* jac
                 end
             end
         end
@@ -292,6 +289,7 @@ function gen_matvec(cny, coor)
     kglobal_col = zeros(Int, nnz)
     kglobal_val = zeros(Float64, nnz)
     kglobal_ind = zeros(Int, 3 * nnode + 1)
+
     kglobal_ind[1] = 1
     for idof in 1:3*nnode
         kglobal_ind[idof+1] = kglobal_ind[idof] + length(kglobal_tmp_col[idof])
@@ -303,25 +301,43 @@ function gen_matvec(cny, coor)
     kglobal_diag_inv = zeros(Float64, 3 * nnode)
 
     # inpulse force
+    fglobal = zeros(Float64, nblock, 3 * nnode)
     for inode in 1:nnode
         x, y, z = coor[:, inode]
-        if norm([x, y, z] .- [1.0, 1.0, 4.0]) < 1.0e-6
-            fglobal[3*(inode-1)+3] = -1.0
+        for iblock in 1:nblock
+            iy, ix = divrem(iblock - 1, mblock) .+ 1
+            # xt = 2.0 * (x - 1.0) / 2.0
+            xt = (xmax - xmin) / mblock * (ix - 0.5)
+            yt = (ymax - ymin) / mblock * (iy - 0.5)
+            zt = zmax
+            if norm([x, y, z] .- [xt, yt, zt]) < 1.0e-6
+                fglobal[iblock, 3*(inode-1)+3] = 1.0
+            end
         end
     end
+    # for inode in 1:nnode
+    #     x, y, z = coor[:, inode]
+    #     if norm([x, y, z] .- [1.0, 1.0, 4.0]) < 1.0e-6
+    #         for iblock in 1:nblock
+    #             fglobal[iblock, 3*(inode-1)+3] = 1.0
+    #         end
+    #     end
+    # end
 
     # boundary conditions
     bcflag = zeros(Bool, 3 * nnode)
-    uglobal = zeros(Float64, 3 * nnode)
+    uglobal = zeros(Float64, nblock, 3 * nnode)
     for inode in 1:nnode
         x, y, z = coor[:, inode]
-        if abs(z) < 1.0e-6
+        if abs(z - zmin) < 1.0e-6
             bcflag[3*(inode-1)+1] = true
             bcflag[3*(inode-1)+2] = true
             bcflag[3*(inode-1)+3] = true
-            uglobal[3*(inode-1)+1] = 0.0
-            uglobal[3*(inode-1)+2] = 0.0
-            uglobal[3*(inode-1)+3] = 0.0
+            for iblock in 1:nblock
+                uglobal[iblock, 3*(inode-1)+1] = 0.0
+                uglobal[iblock, 3*(inode-1)+2] = 0.0
+                uglobal[iblock, 3*(inode-1)+3] = 0.0
+            end
         end
     end
 
@@ -335,11 +351,15 @@ function gen_matvec(cny, coor)
                     kglobal_val[kglobal_ind[idof]+jdof-1] = 0.0
                 end
             end
-            fglobal[idof] = uglobal[idof]
+            for iblock in 1:nblock
+                fglobal[iblock, idof] = uglobal[iblock, idof]
+            end
         else
             for jdof in 1:kglobal_ind[idof+1]-kglobal_ind[idof]
                 if bcflag[kglobal_col[kglobal_ind[idof]+jdof-1]]
-                    fglobal[idof] -= kglobal_val[kglobal_ind[idof]+jdof-1] * uglobal[kglobal_col[kglobal_ind[idof]+jdof-1]]
+                    for iblock in 1:nblock
+                        fglobal[iblock, idof] -= kglobal_val[kglobal_ind[idof]+jdof-1] * uglobal[iblock, kglobal_col[kglobal_ind[idof]+jdof-1]]
+                    end
                     kglobal_val[kglobal_ind[idof]+jdof-1] = 0.0
                 end
                 if (kglobal_col[kglobal_ind[idof]+jdof-1] == idof)
@@ -353,14 +373,27 @@ function gen_matvec(cny, coor)
         kglobal_diag_inv[idof] = 1.0 / kglobal_diag[idof]
     end
 
+    uglobal_tmp = zeros(Float64, 3 * nnode)
+    fglobal_tmp = zeros(Float64, 3 * nnode)
+    for idof in 1:3*nnode
+        uglobal_tmp[idof] = uglobal[2, idof]
+        fglobal_tmp[idof] = fglobal[2, idof]
+    end
     # solve linear system
-    ConjugateGradient!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+    ConjugateGradient!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal_tmp, fglobal_tmp)
 
-    return kglobal_val, kglobal_col, kglobal_ind, uglobal, fglobal
+    return kglobal_val, kglobal_col, kglobal_ind, uglobal_tmp, fglobal_tmp
 end
 
-cny, coor = gen_model()
+ds = 0.125
+xmin = 0.0
+xmax = 2.0
+ymin = 0.0
+ymax = 2.0
+zmin = 0.0
+zmax = 4.0
+cny, coor = gen_model(ds, xmin, xmax, ymin, ymax, zmin, zmax)
 
-kglobal_val, kglobal_col, kglobal_ind, uglobal, fglobal = gen_matvec(cny, coor)
+kglobal_val, kglobal_col, kglobal_ind, uglobal, fglobal = gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax)
 
 write(cny, coor, kglobal_val, kglobal_col, kglobal_ind, uglobal, fglobal)
