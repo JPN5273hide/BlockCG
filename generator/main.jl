@@ -1,3 +1,4 @@
+using Random
 using DelimitedFiles
 using WriteVTK
 using LinearAlgebra
@@ -45,7 +46,7 @@ function gen_model(ds, xmin, xmax, ymin, ymax, zmin, zmax)
     return cny, coor
 end
 
-function write(cny, coor, kglobal_val, kglobal_col, kglobal_ind, uglobal, fglobal)
+function write(ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
     cells = [MeshCell(VTKCellTypes.VTK_HEXAHEDRON, cny[:, i]) for i = 1:size(cny, 2)]
 
     ux = uglobal[1:3:end]
@@ -57,13 +58,15 @@ function write(cny, coor, kglobal_val, kglobal_col, kglobal_ind, uglobal, fgloba
         vtk["uz"] = uz
     end
 
-    writedlm("../data/cny.dat", cny)
-    writedlm("../data/coor.dat", coor)
+    writedlm("../data/cny.dat", transpose(cny))
+    writedlm("../data/coor.dat", transpose(coor))
     writedlm("../data/kglobal_val.dat", kglobal_val)
     writedlm("../data/kglobal_col.dat", kglobal_col)
     writedlm("../data/kglobal_ind.dat", kglobal_ind)
-    writedlm("../data/uinit.dat", uglobal)
-    writedlm("../data/fglobal.dat", fglobal)
+    writedlm("../data/kglobal_diag_inv.dat", kglobal_diag_inv)
+    writedlm("../data/uinit.dat", transpose(uglobal))
+    writedlm("../data/fglobal.dat", transpose(fglobal))
+    writedlm("../data/n.dat", [ndof, nnz, nblock])
 end
 
 function spmatvec!(val, col, ind, vec, res)
@@ -73,6 +76,24 @@ function spmatvec!(val, col, ind, vec, res)
             tmp += val[j] * vec[col[j]]
         end
         res[i] = tmp
+    end
+end
+
+function spmatvec_block!(val, col, ind, vec, res)
+    nblock, ndof = size(vec)
+    tmp = zeros(Float64, nblock)
+    for i in 1:ndof
+        for iblock in 1:nblock
+            tmp[iblock] = 0.0
+        end
+        for j in ind[i]:ind[i+1]-1
+            for iblock in 1:nblock
+                tmp[iblock] += val[j] * vec[iblock, col[j]]
+            end
+        end
+        for iblock in 1:nblock
+            res[iblock, i] = tmp[iblock]
+        end
     end
 end
 
@@ -89,7 +110,6 @@ function ConjugateGradient!(amat_val, amat_col, amat_ind, amat_diag_inv, uvec, b
     uvec .= bvec .* amat_diag_inv
 
     # r <- b - A u
-    # qvec .= amat * uvec
     spmatvec!(amat_val, amat_col, amat_ind, uvec, qvec)
     rvec .= bvec .- qvec
     rnorm = sqrt(dot(rvec, rvec))
@@ -135,13 +155,196 @@ function ConjugateGradient!(amat_val, amat_col, amat_ind, amat_diag_inv, uvec, b
     end
 end
 
-function gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax)
+function pinv_(A)
+    F = svd(A)
+    S_inv = Diagonal(1.0 ./ F.S)
+    return (F.Vt)' * S_inv * (F.U)'
+end
 
-    # nblock for block conjugate gradient
-    # nblock needs to be square of an integer
-    mblock = 4
-    nblock = mblock * mblock
+# solve A u = b
+function BlockConjugateGradient!(amat_val, amat_col, amat_ind, amat_diag_inv, uvec, bvec)
+    nblock, ndof = size(bvec)
+    rvec = zeros(Float64, size(bvec))
+    pvec = zeros(Float64, size(bvec))
+    qvec = zeros(Float64, size(bvec))
+    zvec = zeros(Float64, size(bvec))
 
+    bnorm = zeros(Float64, nblock)
+    rnorm = zeros(Float64, nblock)
+
+    bnorm .= 0.0
+    for iblock in 1:nblock
+        bnorm[iblock] = norm(bvec[iblock, :])
+    end
+
+    # initial guess
+    for idof in 1:ndof
+        for iblock in 1:nblock
+            uvec[iblock, idof] = bvec[iblock, idof] * amat_diag_inv[idof]
+        end
+    end
+
+    # q <- A u
+    spmatvec_block!(amat_val, amat_col, amat_ind, uvec, qvec)
+
+    # r <- b - q
+    rvec .= bvec .- qvec
+    for iblock in 1:nblock
+        rnorm[iblock] = norm(rvec[iblock, :])
+    end
+
+    alpha = zeros(Float64, nblock, nblock)
+    beta = zeros(Float64, nblock, nblock)
+    rho = zeros(Float64, nblock, nblock)
+    iter = 1
+    @show rnorm[1] ./ bnorm[1]
+    while maximum(rnorm / bnorm) > 1.0e-8
+        # z <- M^-1 r
+        for idof in 1:ndof
+            for iblock in 1:nblock
+                zvec[iblock, idof] = rvec[iblock, idof] * amat_diag_inv[idof]
+            end
+        end
+
+        if iter > 1
+            # beta <- (r, z) / rho
+            beta .= pinv_(rho) * (rvec * transpose(zvec))
+        end
+
+        # p <- z + beta p
+        pvec .= zvec .+ transpose(beta) * pvec
+
+
+        # q <- A p
+        spmatvec_block!(amat_val, amat_col, amat_ind, pvec, qvec)
+
+        # rho <- (r, z)
+        rho .= rvec * transpose(zvec)
+
+        # alpha <- rho / (p, q)
+        alpha .= pinv_(pvec * transpose(qvec)) * rho
+
+        # q <- -alpha q
+        qvec .= -transpose(alpha) * qvec
+
+        # r <- r + q
+        rvec .= rvec .+ qvec
+
+        # u <- u + alpha p
+        uvec .= uvec .+ transpose(alpha) * pvec
+
+        rnorm .= 0.0
+        for iblock in 1:nblock
+            rnorm[iblock] = norm(rvec[iblock, :])
+        end
+        @show rnorm[1] ./ bnorm[1]
+
+        iter += 1
+        if (iter > 500)
+            break
+        end
+    end
+    @show "max iter: ", iter
+end
+
+
+# solve A u = b
+function BlockConjugateGradient_diag!(amat_val, amat_col, amat_ind, amat_diag_inv, uvec, bvec)
+    nblock, ndof = size(bvec)
+    rvec = zeros(Float64, size(bvec))
+    pvec = zeros(Float64, size(bvec))
+    qvec = zeros(Float64, size(bvec))
+    zvec = zeros(Float64, size(bvec))
+
+    bnorm = zeros(Float64, nblock)
+    rnorm = zeros(Float64, nblock)
+
+    bnorm .= 0.0
+    for iblock in 1:nblock
+        bnorm[iblock] = norm(bvec[iblock, :])
+    end
+
+    # initial guess
+    for idof in 1:ndof
+        for iblock in 1:nblock
+            uvec[iblock, idof] = bvec[iblock, idof] * amat_diag_inv[idof]
+        end
+    end
+
+    # q <- A u
+    spmatvec_block!(amat_val, amat_col, amat_ind, uvec, qvec)
+
+    # r <- b - q
+    rvec .= bvec .- qvec
+    for iblock in 1:nblock
+        rnorm[iblock] = norm(rvec[iblock, :])
+    end
+
+    alpha = zeros(Float64, nblock)
+    beta = zeros(Float64, nblock)
+    rho = zeros(Float64, nblock)
+    iter = 1
+    @show (rnorm./bnorm)[1]
+    while maximum(rnorm / bnorm) > 1.0e-8
+        # z <- M^-1 r
+        for idof in 1:ndof
+            for iblock in 1:nblock
+                zvec[iblock, idof] = rvec[iblock, idof] * amat_diag_inv[idof]
+            end
+        end
+
+        if iter > 1
+            # beta <- (r, z) / rho
+            # beta .= inv(rho) * (rvec * transpose(zvec))
+            for iblock in 1:nblock
+                beta[iblock] = dot(rvec[iblock, :], zvec[iblock, :]) / rho[iblock]
+            end
+        end
+
+        # p <- z + beta p
+        for iblock in 1:nblock
+            pvec[iblock, :] = zvec[iblock, :] .+ beta[iblock] * pvec[iblock, :]
+        end
+
+        # q <- A p
+        spmatvec_block!(amat_val, amat_col, amat_ind, pvec, qvec)
+
+        # rho <- (r, z)
+        for iblock in 1:nblock
+            rho[iblock] = dot(rvec[iblock, :], zvec[iblock, :])
+        end
+
+        # alpha <- rho / (p, q)
+        for iblock in 1:nblock
+            alpha[iblock] = rho[iblock] / dot(pvec[iblock, :], qvec[iblock, :])
+        end
+
+        # q <- -alpha q
+        for iblock in 1:nblock
+            qvec[iblock, :] .= -alpha[iblock] .* qvec[iblock, :]
+        end
+
+        # r <- r + q
+        rvec .= rvec .+ qvec
+
+        # u <- u + alpha p
+        for iblock in 1:nblock
+            uvec[iblock, :] .= uvec[iblock, :] .+ alpha[iblock] .* pvec[iblock, :]
+        end
+
+        rnorm .= 0.0
+        for iblock in 1:nblock
+            rnorm[iblock] = norm(rvec[iblock, :])
+        end
+        @show (rnorm./bnorm)[1]
+
+        iter += 1
+    end
+    @show "max iter: ", iter
+end
+
+
+function gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, mblock)
     # material properties
     young = 10.0
     nyu = 0.3
@@ -311,18 +514,11 @@ function gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax)
             yt = (ymax - ymin) / mblock * (iy - 0.5)
             zt = zmax
             if norm([x, y, z] .- [xt, yt, zt]) < 1.0e-6
+                @show "force at node ", inode
                 fglobal[iblock, 3*(inode-1)+3] = 1.0
             end
         end
     end
-    # for inode in 1:nnode
-    #     x, y, z = coor[:, inode]
-    #     if norm([x, y, z] .- [1.0, 1.0, 4.0]) < 1.0e-6
-    #         for iblock in 1:nblock
-    #             fglobal[iblock, 3*(inode-1)+3] = 1.0
-    #         end
-    #     end
-    # end
 
     # boundary conditions
     bcflag = zeros(Bool, 3 * nnode)
@@ -373,17 +569,9 @@ function gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax)
         kglobal_diag_inv[idof] = 1.0 / kglobal_diag[idof]
     end
 
-    uglobal_tmp = zeros(Float64, 3 * nnode)
-    fglobal_tmp = zeros(Float64, 3 * nnode)
-    for idof in 1:3*nnode
-        uglobal_tmp[idof] = uglobal[2, idof]
-        fglobal_tmp[idof] = fglobal[2, idof]
-    end
-    # solve linear system
-    ConjugateGradient!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal_tmp, fglobal_tmp)
-
-    return kglobal_val, kglobal_col, kglobal_ind, uglobal_tmp, fglobal_tmp
+    return kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal
 end
+
 
 ds = 0.125
 xmin = 0.0
@@ -394,6 +582,85 @@ zmin = 0.0
 zmax = 4.0
 cny, coor = gen_model(ds, xmin, xmax, ymin, ymax, zmin, zmax)
 
-kglobal_val, kglobal_col, kglobal_ind, uglobal, fglobal = gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax)
+# # nblock for block conjugate gradient
+# # nblock needs to be square of an integer
+mblock = 4
+nblock = mblock * mblock
+kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal = gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, mblock)
 
-write(cny, coor, kglobal_val, kglobal_col, kglobal_ind, uglobal, fglobal)
+
+# BlockConjugateGradient!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+
+BlockConjugateGradient_diag!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+
+nblock, ndof = size(uglobal)
+nnz = length(kglobal_val)
+write(ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+
+
+# # 正定値行列を作成するための関数
+# function generate_positive_definite_matrix(ndof)
+#     A = randn(ndof, ndof)  # ランダムな行列を生成
+#     return A' * A           # A^T * A で正定値行列を作成
+# end
+
+# # 正定値行列をCRS形式に変換する関数
+# function convert_to_crs(matrix)
+#     val = []
+#     col = []
+#     ind = [1]  # CRSの行インデックス（1-indexed）
+
+#     for i in 1:size(matrix, 1)
+#         for j in 1:size(matrix, 2)
+#             if matrix[i, j] != 0
+#                 push!(val, matrix[i, j])
+#                 push!(col, j)
+#             end
+#         end
+#         push!(ind, length(val) + 1)
+#     end
+
+#     return val, col, ind
+# end
+
+# # テスト行列の作成
+# Random.seed!(0)
+# ndof = 200   # 自由度（行列のサイズ）
+# nblock = 4 # ブロック数を16に設定
+
+# # 正定値行列の生成
+# A = generate_positive_definite_matrix(ndof)
+# amat_val, amat_col, amat_ind = convert_to_crs(A)
+
+# # 対角成分の逆数を計算（前処理用）
+# amat_diag_inv = 1.0 ./ diag(A)  # 対角成分を抽出して逆数を取る
+
+# # 右辺ベクトルを作成
+# # ここでブロック数に合わせてベクトルを初期化
+# bvec = randn(nblock, ndof)  # 16x4 の右辺ベクトルをランダムに生成
+
+# # 解ベクトルの初期化
+# uvec = zeros(Float64, nblock, ndof)
+
+# # BlockConjugateGradient! 関数をテスト
+# BlockConjugateGradient_diag!(amat_val, amat_col, amat_ind, amat_diag_inv, uvec, bvec)
+
+
+# # --- uvec が正しいか確認するコードを追加 ---
+# # A * uvec を計算し、bvec に近いか確認
+# function verify_solution(A, uvec, bvec)
+#     nblock = size(bvec, 1)
+#     ndof = size(bvec, 2)
+
+#     # A * uvec を計算
+#     b_approx = uvec * A
+
+#     # 各ブロックの誤差を計算
+#     for iblock in 1:nblock
+#         error = norm(b_approx[iblock, :] - bvec[iblock, :])
+#         println("ブロック $iblock の誤差: ", error)
+#     end
+# end
+
+# # 解の検証
+# verify_solution(A, uvec, bvec)

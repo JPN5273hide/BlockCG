@@ -1,5 +1,8 @@
 *
 !*/
-!generator/*.jl
+!generator/main.jl
+!solver/*.f90
 !.gitignore
+!Makefile
+!gh200.job
 !README.md
