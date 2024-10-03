@@ -1,7 +1,7 @@
 *
 !*/
 !generator/main.jl
-!solver/*.f90
+!solver/src/*.f90
 !.gitignore
 !Makefile
 !gh200.job
