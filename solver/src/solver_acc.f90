@@ -224,8 +224,83 @@ contains
             dot16 = dot16 + xvec(16, idof) * yvec(16, idof)
         end do
         !$acc end kernels
-    end
+    end subroutine
 
+    subroutine div1_block(a01, a02, a03, a04, &
+                          a05, a06, a07, a08, &
+                          a09, a10, a11, a12, &
+                          a13, a14, a15, a16, &
+                          b01, b02, b03, b04, &
+                          b05, b06, b07, b08, &
+                          b09, b10, b11, b12, &
+                          b13, b14, b15, b16)
+        implicit none
+        double precision, intent(in) :: &
+            b01, b02, b03, b04, &
+            b05, b06, b07, b08, &
+            b09, b10, b11, b12, &
+            b13, b14, b15, b16
+        double precision, intent(inout) :: &
+            a01, a02, a03, a04, &
+            a05, a06, a07, a08, &
+            a09, a10, a11, a12, &
+            a13, a14, a15, a16
+
+        a01 = a01 / b01
+        a02 = a02 / b02
+        a03 = a03 / b03
+        a04 = a04 / b04
+        a05 = a05 / b05
+        a06 = a06 / b06
+        a07 = a07 / b07
+        a08 = a08 / b08
+        a09 = a09 / b09
+        a10 = a10 / b10
+        a11 = a11 / b11
+        a12 = a12 / b12
+        a13 = a13 / b13
+        a14 = a14 / b14
+        a15 = a15 / b15
+        a16 = a16 / b16
+    end subroutine
+
+    subroutine div2_block(a01, a02, a03, a04, &
+                          a05, a06, a07, a08, &
+                          a09, a10, a11, a12, &
+                          a13, a14, a15, a16, &
+                          b01, b02, b03, b04, &
+                          b05, b06, b07, b08, &
+                          b09, b10, b11, b12, &
+                          b13, b14, b15, b16)
+        implicit none
+        double precision, intent(in) :: &
+            b01, b02, b03, b04, &
+            b05, b06, b07, b08, &
+            b09, b10, b11, b12, &
+            b13, b14, b15, b16
+        double precision, intent(inout) :: &
+            a01, a02, a03, a04, &
+            a05, a06, a07, a08, &
+            a09, a10, a11, a12, &
+            a13, a14, a15, a16
+
+        a01 = b01 / a01
+        a02 = b02 / a02
+        a03 = b03 / a03
+        a04 = b04 / a04
+        a05 = b05 / a05
+        a06 = b06 / a06
+        a07 = b07 / a07
+        a08 = b08 / a08
+        a09 = b09 / a09
+        a10 = b10 / a10
+        a11 = b11 / a11
+        a12 = b12 / a12
+        a13 = b13 / a13
+        a14 = b14 / a14
+        a15 = b15 / a15
+        a16 = b16 / a16
+    end subroutine
     subroutine err_block(err, &
                          rnorm01, rnorm02, rnorm03, rnorm04, &
                          rnorm05, rnorm06, rnorm07, rnorm08, &
@@ -251,7 +326,7 @@ contains
                   rnorm05 / bnorm05, rnorm06 / bnorm06, rnorm07 / bnorm07, rnorm08 / bnorm08, &
                   rnorm09 / bnorm09, rnorm10 / bnorm10, rnorm11 / bnorm11, rnorm12 / bnorm12, &
                   rnorm13 / bnorm13, rnorm14 / bnorm14, rnorm15 / bnorm15, rnorm16 / bnorm16)
-    end
+    end subroutine
 
     subroutine block_conjugate_gradient &
         (ndof, nnz, nblock, amat_val, amat_col, amat_ind, amat_diag_inv, uvec, bvec)
@@ -340,22 +415,14 @@ contains
                                beta05, beta06, beta07, beta08, &
                                beta09, beta10, beta11, beta12, &
                                beta13, beta14, beta15, beta16)
-                beta01 = beta01 / rho01
-                beta02 = beta02 / rho02
-                beta03 = beta03 / rho03
-                beta04 = beta04 / rho04
-                beta05 = beta05 / rho05
-                beta06 = beta06 / rho06
-                beta07 = beta07 / rho07
-                beta08 = beta08 / rho08
-                beta09 = beta09 / rho09
-                beta10 = beta10 / rho10
-                beta11 = beta11 / rho11
-                beta12 = beta12 / rho12
-                beta13 = beta13 / rho13
-                beta14 = beta14 / rho14
-                beta15 = beta15 / rho15
-                beta16 = beta16 / rho16
+                call div1_block(beta01, beta02, beta03, beta04, &
+                                beta05, beta06, beta07, beta08, &
+                                beta09, beta10, beta11, beta12, &
+                                beta13, beta14, beta15, beta16, &
+                                rho01, rho02, rho03, rho04, &
+                                rho05, rho06, rho07, rho08, &
+                                rho09, rho10, rho11, rho12, &
+                                rho13, rho14, rho15, rho16)
             end if
 
             ! p <- z + beta p
@@ -379,22 +446,14 @@ contains
                            alpha05, alpha06, alpha07, alpha08, &
                            alpha09, alpha10, alpha11, alpha12, &
                            alpha13, alpha14, alpha15, alpha16)
-            alpha01 = rho01 / alpha01
-            alpha02 = rho02 / alpha02
-            alpha03 = rho03 / alpha03
-            alpha04 = rho04 / alpha04
-            alpha05 = rho05 / alpha05
-            alpha06 = rho06 / alpha06
-            alpha07 = rho07 / alpha07
-            alpha08 = rho08 / alpha08
-            alpha09 = rho09 / alpha09
-            alpha10 = rho10 / alpha10
-            alpha11 = rho11 / alpha11
-            alpha12 = rho12 / alpha12
-            alpha13 = rho13 / alpha13
-            alpha14 = rho14 / alpha14
-            alpha15 = rho15 / alpha15
-            alpha16 = rho16 / alpha16
+            call div2_block(alpha01, alpha02, alpha03, alpha04, &
+                            alpha05, alpha06, alpha07, alpha08, &
+                            alpha09, alpha10, alpha11, alpha12, &
+                            alpha13, alpha14, alpha15, alpha16, &
+                            rho01, rho02, rho03, rho04, &
+                            rho05, rho06, rho07, rho08, &
+                            rho09, rho10, rho11, rho12, &
+                            rho13, rho14, rho15, rho16)
 
             ! r <- r - alpha q
             call xpby_block(ndof, nblock, rvec, qvec, rvec, &
