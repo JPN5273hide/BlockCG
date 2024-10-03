@@ -1,5 +1,7 @@
 module solver
     implicit none
+    private :: spmatvec_block, norm_block, axpby_block, preconditioner_block, dot_block
+    public :: block_conjugate_gradient, validate
 contains
     subroutine spmatvec_block(ndof, nblock, val, col, ind, vec, res)
         implicit none

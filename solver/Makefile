@@ -6,8 +6,9 @@ FC = mpif90
 FLAGS = -fast -lm -acc -gpu=cc90,cuda12.3,fastmath -Minfo=accel
 
 # Source and object files
-SRC = src/solver.f90 src/main.f90
-OBJ = build/solver.o build/main.o
+SRC = $(wildcard src/*.f90)
+OBJ = $(SRC:src/%.f90=build/%.o)
+# OBJ = build/solver.o build/main.o
 
 # Output executable
 TARGET = main
@@ -23,7 +24,10 @@ $(TARGET): $(OBJ)
 build/solver.o: src/solver.f90 | build
 	$(FC) $(FLAGS) -c $< -o $@
 
-build/main.o: src/main.f90 build/solver.o | build
+build/solver_acc.o: src/solver_acc.f90 | build
+	$(FC) $(FLAGS) -c $< -o $@
+
+build/main.o: src/main.f90 build/solver.o build/solver_acc.o | build
 	$(FC) $(FLAGS) -c $< -o $@
 
 # Rule to create the build directory if it doesn't exist

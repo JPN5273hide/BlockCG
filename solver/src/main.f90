@@ -1,5 +1,6 @@
 program main
-    use solver
+    use openacc
+    use solver_acc
     implicit none
 
     integer :: ndof, nnz, nblock, idof, iblock
@@ -15,7 +16,7 @@ program main
     call read_data(ndof, nnz, nblock, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
 
     print *, "Solving..."
-    call block_conjugate_gradient(ndof, nblock, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+    call block_conjugate_gradient(ndof, nnz, nblock, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
 
     print *, "Output data..."
     open(10, file='../data/sol.dat', status='replace')
@@ -28,7 +29,7 @@ program main
     close(10)
 
     print *, "Validation..."
-    call validate(ndof, nblock, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+    call validate(ndof, nnz, nblock, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
 
 contains
 

@@ -208,7 +208,7 @@ function BlockConjugateGradient!(amat_val, amat_col, amat_ind, amat_diag_inv, uv
 
         if iter > 1
             # beta <- (r, z) / rho
-            beta .= pinv_(rho) * (rvec * transpose(zvec))
+            beta .= pinv(rho) * (rvec * transpose(zvec))
         end
 
         # p <- z + beta p
@@ -222,7 +222,7 @@ function BlockConjugateGradient!(amat_val, amat_col, amat_ind, amat_diag_inv, uv
         rho .= rvec * transpose(zvec)
 
         # alpha <- rho / (p, q)
-        alpha .= pinv_(pvec * transpose(qvec)) * rho
+        alpha .= pinv(pvec * transpose(qvec)) * rho
 
         # q <- -alpha q
         qvec .= -transpose(alpha) * qvec
@@ -626,7 +626,7 @@ write(ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglob
 # # テスト行列の作成
 # Random.seed!(0)
 # ndof = 200   # 自由度（行列のサイズ）
-# nblock = 4 # ブロック数を16に設定
+# nblock = 16 # ブロック数を16に設定
 
 # # 正定値行列の生成
 # A = generate_positive_definite_matrix(ndof)
@@ -642,7 +642,11 @@ write(ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglob
 # # 解ベクトルの初期化
 # uvec = zeros(Float64, nblock, ndof)
 
+# # uvec = uvec[1:16, :]
+# # bvec = bvec[1:16, :]
 # # BlockConjugateGradient! 関数をテスト
+# BlockConjugateGradient!(amat_val, amat_col, amat_ind, amat_diag_inv, uvec, bvec)
+# uvec .= 0.0
 # BlockConjugateGradient_diag!(amat_val, amat_col, amat_ind, amat_diag_inv, uvec, bvec)
 
 
