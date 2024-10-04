@@ -1,9 +1,9 @@
 # Compiler and flags
 FC = mpif90
 # A100
-# FLAGS = -fast -lm -acc -gpu=cc80,cuda11.2,fastmath -Minfo=accel
+FLAGS = -O3 -lm -acc -gpu=cc80,cuda11.2,fastmath -Minfo=accel
 # GH200
-FLAGS = -fast -lm -acc -gpu=cc90,cuda12.3,fastmath -Minfo=accel
+# FLAGS = -O3 -lm -acc -gpu=cc90,cuda12.3,fastmath -Minfo=accel
 
 # Source and object files
 SRC = $(wildcard src/*.f90)

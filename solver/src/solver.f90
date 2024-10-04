@@ -6,8 +6,8 @@ contains
     subroutine spmatvec_block(ndof, nblock, val, col, ind, vec, res)
         implicit none
         integer, intent(in) :: ndof, nblock, col(:), ind(:)
-        double precision, intent(in) :: val(:), vec(:,:)
-        double precision, intent(inout) :: res(:,:)
+        double precision, intent(in) :: val(:), vec(:, :)
+        double precision, intent(inout) :: res(:, :)
 
         double precision :: tmp(nblock)
         integer :: idof, iblock, j
@@ -18,7 +18,7 @@ contains
             end do
             do j = ind(idof), ind(idof + 1) - 1
                 do iblock = 1, nblock
-                    tmp(iblock) = tmp(iblock) + val(j) * vec(iblock, col(j))
+                    tmp(iblock) = tmp(iblock) + val(j)*vec(iblock, col(j))
                 end do
             end do
             do iblock = 1, nblock
@@ -30,7 +30,7 @@ contains
     subroutine norm_block(ndof, nblock, vec, norm)
         implicit none
         integer, intent(in) :: ndof, nblock
-        double precision, intent(in) :: vec(:,:)
+        double precision, intent(in) :: vec(:, :)
         double precision, intent(inout) :: norm(:)
 
         integer :: idof, iblock
@@ -40,7 +40,7 @@ contains
         end do
         do idof = 1, ndof
             do iblock = 1, nblock
-                norm(iblock) = norm(iblock) + vec(iblock, idof) * vec(iblock, idof)
+                norm(iblock) = norm(iblock) + vec(iblock, idof)*vec(iblock, idof)
             end do
         end do
         do iblock = 1, nblock
@@ -51,15 +51,15 @@ contains
     subroutine axpby_block(ndof, nblock, xvec, yvec, zvec, a, b)
         implicit none
         integer, intent(in) :: ndof, nblock
-        double precision, intent(in) :: xvec(:,:), yvec(:,:)
-        double precision, intent(inout) :: zvec(:,:)
+        double precision, intent(in) :: xvec(:, :), yvec(:, :)
+        double precision, intent(inout) :: zvec(:, :)
         double precision, intent(in) :: a(:), b(:)
 
         integer :: idof, iblock
 
         do idof = 1, ndof
             do iblock = 1, nblock
-                zvec(iblock, idof) = a(iblock) * xvec(iblock, idof) + b(iblock) * yvec(iblock, idof)
+                zvec(iblock, idof) = a(iblock)*xvec(iblock, idof) + b(iblock)*yvec(iblock, idof)
             end do
         end do
     end
@@ -67,14 +67,14 @@ contains
     subroutine preconditioner_block(ndof, nblock, rvec, zvec, diag_inv)
         implicit none
         integer, intent(in) :: ndof, nblock
-        double precision, intent(in) :: rvec(:,:), diag_inv(:)
-        double precision, intent(inout) :: zvec(:,:)
+        double precision, intent(in) :: rvec(:, :), diag_inv(:)
+        double precision, intent(inout) :: zvec(:, :)
 
         integer :: idof, iblock
 
         do idof = 1, ndof
             do iblock = 1, nblock
-                zvec(iblock, idof) = rvec(iblock, idof) * diag_inv(idof)
+                zvec(iblock, idof) = rvec(iblock, idof)*diag_inv(idof)
             end do
         end do
     end
@@ -82,7 +82,7 @@ contains
     subroutine dot_block(ndof, nblock, xvec, yvec, dot)
         implicit none
         integer, intent(in) :: ndof, nblock
-        double precision, intent(in) :: xvec(:,:), yvec(:,:)
+        double precision, intent(in) :: xvec(:, :), yvec(:, :)
         double precision, intent(inout) :: dot(:)
 
         integer :: idof, iblock
@@ -92,7 +92,7 @@ contains
         end do
         do idof = 1, ndof
             do iblock = 1, nblock
-                dot(iblock) = dot(iblock) + xvec(iblock, idof) * yvec(iblock, idof)
+                dot(iblock) = dot(iblock) + xvec(iblock, idof)*yvec(iblock, idof)
             end do
         end do
     end
@@ -102,7 +102,7 @@ contains
         implicit none
         double precision, intent(in) :: amat_val(:), amat_diag_inv(:), &
             bvec(:, :)
-        double precision, intent(inout) :: uvec(:,:)
+        double precision, intent(inout) :: uvec(:, :)
         integer, intent(in) :: ndof, nblock, amat_col(:), amat_ind(:)
 
         double precision :: rvec(nblock, ndof), &
@@ -125,7 +125,7 @@ contains
         uvec = 0d0
 
         print *, "start solving..."
-    
+
         ! calculate bnorm
         call norm_block(ndof, nblock, bvec, bnorm)
 
@@ -138,8 +138,8 @@ contains
         ! calculate rnorm
         call norm_block(ndof, nblock, rvec, rnorm)
 
-        ! print *, "iter = ", iter, "err = ", maxval(rnorm / bnorm) 
-        do while (maxval(rnorm / bnorm) > 10d0**(-8))
+        ! print *, "iter = ", iter, "err = ", maxval(rnorm / bnorm)
+        do while (maxval(rnorm/bnorm) > 10d0**(-8))
             ! z <- M^-1 r
             call preconditioner_block(ndof, nblock, rvec, zvec, amat_diag_inv)
 
@@ -147,7 +147,7 @@ contains
                 ! beta <- (r, z) / rho
                 call dot_block(ndof, nblock, rvec, zvec, beta)
                 do iblock = 1, nblock
-                    beta(iblock) = beta(iblock) / rho(iblock)
+                    beta(iblock) = beta(iblock)/rho(iblock)
                 end do
             end if
 
@@ -163,7 +163,7 @@ contains
             ! alpha <- rho / (p, q)
             call dot_block(ndof, nblock, pvec, qvec, alpha)
             do iblock = 1, nblock
-                alpha(iblock) = rho(iblock) / alpha(iblock)
+                alpha(iblock) = rho(iblock)/alpha(iblock)
             end do
 
             ! r <- r - alpha q
@@ -197,6 +197,6 @@ contains
         end do
 
         print *, "L2 norm of residual: ", sqrt(sum(res))
-        
+
     end
 end module

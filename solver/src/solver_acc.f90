@@ -6,8 +6,8 @@ contains
     subroutine spmatvec_block(ndof, nnz, nblock, val, col, ind, vec, res, tmp)
         implicit none
         integer, intent(in) :: ndof, nnz, nblock, col(:), ind(:)
-        double precision, intent(in) :: val(:), vec(:,:)
-        double precision, intent(inout) :: res(:,:), tmp
+        double precision, intent(in) :: val(:), vec(:, :)
+        double precision, intent(inout) :: res(:, :), tmp
 
         integer :: idof, iblock, j
 
@@ -17,7 +17,7 @@ contains
             do iblock = 1, nblock
                 tmp = 0.0
                 do j = ind(idof), ind(idof + 1) - 1
-                    tmp = tmp + val(j) * vec(iblock, col(j))
+                    tmp = tmp + val(j)*vec(iblock, col(j))
                 end do
                 res(iblock, idof) = tmp
             end do
@@ -32,7 +32,7 @@ contains
                           norm13, norm14, norm15, norm16)
         implicit none
         integer, intent(in) :: ndof, nblock
-        double precision, intent(in) :: vec(:,:)
+        double precision, intent(in) :: vec(:, :)
         double precision, intent(inout) :: &
             norm01, norm02, norm03, norm04, &
             norm05, norm06, norm07, norm08, &
@@ -64,22 +64,22 @@ contains
         !$acc             norm09, norm10, norm11, norm12, &
         !$acc             norm13, norm14, norm15, norm16)
         do idof = 1, ndof
-            norm01 = norm01 + vec(1, idof) * vec(1, idof)
-            norm02 = norm02 + vec(2, idof) * vec(2, idof)
-            norm03 = norm03 + vec(3, idof) * vec(3, idof)
-            norm04 = norm04 + vec(4, idof) * vec(4, idof)
-            norm05 = norm05 + vec(5, idof) * vec(5, idof)
-            norm06 = norm06 + vec(6, idof) * vec(6, idof)
-            norm07 = norm07 + vec(7, idof) * vec(7, idof)
-            norm08 = norm08 + vec(8, idof) * vec(8, idof)
-            norm09 = norm09 + vec(9, idof) * vec(9, idof)
-            norm10 = norm10 + vec(10, idof) * vec(10, idof)
-            norm11 = norm11 + vec(11, idof) * vec(11, idof)
-            norm12 = norm12 + vec(12, idof) * vec(12, idof)
-            norm13 = norm13 + vec(13, idof) * vec(13, idof)
-            norm14 = norm14 + vec(14, idof) * vec(14, idof)
-            norm15 = norm15 + vec(15, idof) * vec(15, idof)
-            norm16 = norm16 + vec(16, idof) * vec(16, idof)
+            norm01 = norm01 + vec(1, idof)*vec(1, idof)
+            norm02 = norm02 + vec(2, idof)*vec(2, idof)
+            norm03 = norm03 + vec(3, idof)*vec(3, idof)
+            norm04 = norm04 + vec(4, idof)*vec(4, idof)
+            norm05 = norm05 + vec(5, idof)*vec(5, idof)
+            norm06 = norm06 + vec(6, idof)*vec(6, idof)
+            norm07 = norm07 + vec(7, idof)*vec(7, idof)
+            norm08 = norm08 + vec(8, idof)*vec(8, idof)
+            norm09 = norm09 + vec(9, idof)*vec(9, idof)
+            norm10 = norm10 + vec(10, idof)*vec(10, idof)
+            norm11 = norm11 + vec(11, idof)*vec(11, idof)
+            norm12 = norm12 + vec(12, idof)*vec(12, idof)
+            norm13 = norm13 + vec(13, idof)*vec(13, idof)
+            norm14 = norm14 + vec(14, idof)*vec(14, idof)
+            norm15 = norm15 + vec(15, idof)*vec(15, idof)
+            norm16 = norm16 + vec(16, idof)*vec(16, idof)
         end do
         !$acc end kernels
         norm01 = sqrt(norm01)
@@ -101,37 +101,37 @@ contains
     end subroutine
 
     subroutine xpby_block(ndof, nblock, xvec, yvec, zvec, &
-        b01, b02, b03, b04, b05, b06, b07, b08, &
-        b09, b10, b11, b12, b13, b14, b15, b16)
+                          b01, b02, b03, b04, b05, b06, b07, b08, &
+                          b09, b10, b11, b12, b13, b14, b15, b16)
         implicit none
         integer, intent(in) :: ndof, nblock
-        double precision, intent(in) :: xvec(:,:), yvec(:,:)
-        double precision, intent(inout) :: zvec(:,:)
+        double precision, intent(in) :: xvec(:, :), yvec(:, :)
+        double precision, intent(inout) :: zvec(:, :)
         double precision, intent(in) :: &
             b01, b02, b03, b04, b05, b06, b07, b08, &
-            b09, b10, b11, b12, b13, b14, b15, b16 
+            b09, b10, b11, b12, b13, b14, b15, b16
 
         integer :: idof, iblock
 
         !$acc kernels present(xvec, yvec, zvec)
         !$acc loop independent
         do idof = 1, ndof
-            zvec(1, idof) = xvec(1, idof) + b01 * yvec(1, idof)
-            zvec(2, idof) = xvec(2, idof) + b02 * yvec(2, idof)
-            zvec(3, idof) = xvec(3, idof) + b03 * yvec(3, idof)
-            zvec(4, idof) = xvec(4, idof) + b04 * yvec(4, idof)
-            zvec(5, idof) = xvec(5, idof) + b05 * yvec(5, idof)
-            zvec(6, idof) = xvec(6, idof) + b06 * yvec(6, idof)
-            zvec(7, idof) = xvec(7, idof) + b07 * yvec(7, idof)
-            zvec(8, idof) = xvec(8, idof) + b08 * yvec(8, idof)
-            zvec(9, idof) = xvec(9, idof) + b09 * yvec(9, idof)
-            zvec(10, idof) = xvec(10, idof) + b10 * yvec(10, idof)
-            zvec(11, idof) = xvec(11, idof) + b11 * yvec(11, idof)
-            zvec(12, idof) = xvec(12, idof) + b12 * yvec(12, idof)
-            zvec(13, idof) = xvec(13, idof) + b13 * yvec(13, idof)
-            zvec(14, idof) = xvec(14, idof) + b14 * yvec(14, idof)
-            zvec(15, idof) = xvec(15, idof) + b15 * yvec(15, idof)
-            zvec(16, idof) = xvec(16, idof) + b16 * yvec(16, idof)
+            zvec(1, idof) = xvec(1, idof) + b01*yvec(1, idof)
+            zvec(2, idof) = xvec(2, idof) + b02*yvec(2, idof)
+            zvec(3, idof) = xvec(3, idof) + b03*yvec(3, idof)
+            zvec(4, idof) = xvec(4, idof) + b04*yvec(4, idof)
+            zvec(5, idof) = xvec(5, idof) + b05*yvec(5, idof)
+            zvec(6, idof) = xvec(6, idof) + b06*yvec(6, idof)
+            zvec(7, idof) = xvec(7, idof) + b07*yvec(7, idof)
+            zvec(8, idof) = xvec(8, idof) + b08*yvec(8, idof)
+            zvec(9, idof) = xvec(9, idof) + b09*yvec(9, idof)
+            zvec(10, idof) = xvec(10, idof) + b10*yvec(10, idof)
+            zvec(11, idof) = xvec(11, idof) + b11*yvec(11, idof)
+            zvec(12, idof) = xvec(12, idof) + b12*yvec(12, idof)
+            zvec(13, idof) = xvec(13, idof) + b13*yvec(13, idof)
+            zvec(14, idof) = xvec(14, idof) + b14*yvec(14, idof)
+            zvec(15, idof) = xvec(15, idof) + b15*yvec(15, idof)
+            zvec(16, idof) = xvec(16, idof) + b16*yvec(16, idof)
         end do
         !$acc end kernels
     end
@@ -139,30 +139,30 @@ contains
     subroutine preconditioner_block(ndof, nblock, rvec, zvec, diag_inv)
         implicit none
         integer, intent(in) :: ndof, nblock
-        double precision, intent(in) :: rvec(:,:), diag_inv(:)
-        double precision, intent(inout) :: zvec(:,:)
+        double precision, intent(in) :: rvec(:, :), diag_inv(:)
+        double precision, intent(inout) :: zvec(:, :)
 
         integer :: idof, iblock
 
         !$acc kernels present(rvec, zvec, diag_inv)
         !$acc loop independent
         do idof = 1, ndof
-            zvec(1, idof) = rvec(1, idof) * diag_inv(idof)
-            zvec(2, idof) = rvec(2, idof) * diag_inv(idof)
-            zvec(3, idof) = rvec(3, idof) * diag_inv(idof)
-            zvec(4, idof) = rvec(4, idof) * diag_inv(idof)
-            zvec(5, idof) = rvec(5, idof) * diag_inv(idof)
-            zvec(6, idof) = rvec(6, idof) * diag_inv(idof)
-            zvec(7, idof) = rvec(7, idof) * diag_inv(idof)
-            zvec(8, idof) = rvec(8, idof) * diag_inv(idof)
-            zvec(9, idof) = rvec(9, idof) * diag_inv(idof)
-            zvec(10, idof) = rvec(10, idof) * diag_inv(idof)
-            zvec(11, idof) = rvec(11, idof) * diag_inv(idof)
-            zvec(12, idof) = rvec(12, idof) * diag_inv(idof)
-            zvec(13, idof) = rvec(13, idof) * diag_inv(idof)
-            zvec(14, idof) = rvec(14, idof) * diag_inv(idof)
-            zvec(15, idof) = rvec(15, idof) * diag_inv(idof)
-            zvec(16, idof) = rvec(16, idof) * diag_inv(idof)
+            zvec(1, idof) = rvec(1, idof)*diag_inv(idof)
+            zvec(2, idof) = rvec(2, idof)*diag_inv(idof)
+            zvec(3, idof) = rvec(3, idof)*diag_inv(idof)
+            zvec(4, idof) = rvec(4, idof)*diag_inv(idof)
+            zvec(5, idof) = rvec(5, idof)*diag_inv(idof)
+            zvec(6, idof) = rvec(6, idof)*diag_inv(idof)
+            zvec(7, idof) = rvec(7, idof)*diag_inv(idof)
+            zvec(8, idof) = rvec(8, idof)*diag_inv(idof)
+            zvec(9, idof) = rvec(9, idof)*diag_inv(idof)
+            zvec(10, idof) = rvec(10, idof)*diag_inv(idof)
+            zvec(11, idof) = rvec(11, idof)*diag_inv(idof)
+            zvec(12, idof) = rvec(12, idof)*diag_inv(idof)
+            zvec(13, idof) = rvec(13, idof)*diag_inv(idof)
+            zvec(14, idof) = rvec(14, idof)*diag_inv(idof)
+            zvec(15, idof) = rvec(15, idof)*diag_inv(idof)
+            zvec(16, idof) = rvec(16, idof)*diag_inv(idof)
         end do
         !$acc end kernels
     end
@@ -174,7 +174,7 @@ contains
                          dot13, dot14, dot15, dot16)
         implicit none
         integer, intent(in) :: ndof, nblock
-        double precision, intent(in) :: xvec(:,:), yvec(:,:)
+        double precision, intent(in) :: xvec(:, :), yvec(:, :)
         double precision, intent(inout) :: &
             dot01, dot02, dot03, dot04, &
             dot05, dot06, dot07, dot08, &
@@ -206,22 +206,22 @@ contains
         !$acc             dot09, dot10, dot11, dot12, &
         !$acc             dot13, dot14, dot15, dot16)
         do idof = 1, ndof
-            dot01 = dot01 + xvec(1, idof) * yvec(1, idof)
-            dot02 = dot02 + xvec(2, idof) * yvec(2, idof)
-            dot03 = dot03 + xvec(3, idof) * yvec(3, idof)
-            dot04 = dot04 + xvec(4, idof) * yvec(4, idof)
-            dot05 = dot05 + xvec(5, idof) * yvec(5, idof)
-            dot06 = dot06 + xvec(6, idof) * yvec(6, idof)
-            dot07 = dot07 + xvec(7, idof) * yvec(7, idof)
-            dot08 = dot08 + xvec(8, idof) * yvec(8, idof)
-            dot09 = dot09 + xvec(9, idof) * yvec(9, idof)
-            dot10 = dot10 + xvec(10, idof) * yvec(10, idof)
-            dot11 = dot11 + xvec(11, idof) * yvec(11, idof)
-            dot12 = dot12 + xvec(12, idof) * yvec(12, idof)
-            dot13 = dot13 + xvec(13, idof) * yvec(13, idof)
-            dot14 = dot14 + xvec(14, idof) * yvec(14, idof)
-            dot15 = dot15 + xvec(15, idof) * yvec(15, idof)
-            dot16 = dot16 + xvec(16, idof) * yvec(16, idof)
+            dot01 = dot01 + xvec(1, idof)*yvec(1, idof)
+            dot02 = dot02 + xvec(2, idof)*yvec(2, idof)
+            dot03 = dot03 + xvec(3, idof)*yvec(3, idof)
+            dot04 = dot04 + xvec(4, idof)*yvec(4, idof)
+            dot05 = dot05 + xvec(5, idof)*yvec(5, idof)
+            dot06 = dot06 + xvec(6, idof)*yvec(6, idof)
+            dot07 = dot07 + xvec(7, idof)*yvec(7, idof)
+            dot08 = dot08 + xvec(8, idof)*yvec(8, idof)
+            dot09 = dot09 + xvec(9, idof)*yvec(9, idof)
+            dot10 = dot10 + xvec(10, idof)*yvec(10, idof)
+            dot11 = dot11 + xvec(11, idof)*yvec(11, idof)
+            dot12 = dot12 + xvec(12, idof)*yvec(12, idof)
+            dot13 = dot13 + xvec(13, idof)*yvec(13, idof)
+            dot14 = dot14 + xvec(14, idof)*yvec(14, idof)
+            dot15 = dot15 + xvec(15, idof)*yvec(15, idof)
+            dot16 = dot16 + xvec(16, idof)*yvec(16, idof)
         end do
         !$acc end kernels
     end subroutine
@@ -246,22 +246,22 @@ contains
             a09, a10, a11, a12, &
             a13, a14, a15, a16
 
-        a01 = a01 / b01
-        a02 = a02 / b02
-        a03 = a03 / b03
-        a04 = a04 / b04
-        a05 = a05 / b05
-        a06 = a06 / b06
-        a07 = a07 / b07
-        a08 = a08 / b08
-        a09 = a09 / b09
-        a10 = a10 / b10
-        a11 = a11 / b11
-        a12 = a12 / b12
-        a13 = a13 / b13
-        a14 = a14 / b14
-        a15 = a15 / b15
-        a16 = a16 / b16
+        a01 = a01/b01
+        a02 = a02/b02
+        a03 = a03/b03
+        a04 = a04/b04
+        a05 = a05/b05
+        a06 = a06/b06
+        a07 = a07/b07
+        a08 = a08/b08
+        a09 = a09/b09
+        a10 = a10/b10
+        a11 = a11/b11
+        a12 = a12/b12
+        a13 = a13/b13
+        a14 = a14/b14
+        a15 = a15/b15
+        a16 = a16/b16
     end subroutine
 
     subroutine div2_block(a01, a02, a03, a04, &
@@ -284,22 +284,22 @@ contains
             a09, a10, a11, a12, &
             a13, a14, a15, a16
 
-        a01 = b01 / a01
-        a02 = b02 / a02
-        a03 = b03 / a03
-        a04 = b04 / a04
-        a05 = b05 / a05
-        a06 = b06 / a06
-        a07 = b07 / a07
-        a08 = b08 / a08
-        a09 = b09 / a09
-        a10 = b10 / a10
-        a11 = b11 / a11
-        a12 = b12 / a12
-        a13 = b13 / a13
-        a14 = b14 / a14
-        a15 = b15 / a15
-        a16 = b16 / a16
+        a01 = b01/a01
+        a02 = b02/a02
+        a03 = b03/a03
+        a04 = b04/a04
+        a05 = b05/a05
+        a06 = b06/a06
+        a07 = b07/a07
+        a08 = b08/a08
+        a09 = b09/a09
+        a10 = b10/a10
+        a11 = b11/a11
+        a12 = b12/a12
+        a13 = b13/a13
+        a14 = b14/a14
+        a15 = b15/a15
+        a16 = b16/a16
     end subroutine
     subroutine err_block(err, &
                          rnorm01, rnorm02, rnorm03, rnorm04, &
@@ -322,10 +322,10 @@ contains
             bnorm09, bnorm10, bnorm11, bnorm12, &
             bnorm13, bnorm14, bnorm15, bnorm16
 
-        err = max(rnorm01 / bnorm01, rnorm02 / bnorm02, rnorm03 / bnorm03, rnorm04 / bnorm04, &
-                  rnorm05 / bnorm05, rnorm06 / bnorm06, rnorm07 / bnorm07, rnorm08 / bnorm08, &
-                  rnorm09 / bnorm09, rnorm10 / bnorm10, rnorm11 / bnorm11, rnorm12 / bnorm12, &
-                  rnorm13 / bnorm13, rnorm14 / bnorm14, rnorm15 / bnorm15, rnorm16 / bnorm16)
+        err = max(rnorm01/bnorm01, rnorm02/bnorm02, rnorm03/bnorm03, rnorm04/bnorm04, &
+                  rnorm05/bnorm05, rnorm06/bnorm06, rnorm07/bnorm07, rnorm08/bnorm08, &
+                  rnorm09/bnorm09, rnorm10/bnorm10, rnorm11/bnorm11, rnorm12/bnorm12, &
+                  rnorm13/bnorm13, rnorm14/bnorm14, rnorm15/bnorm15, rnorm16/bnorm16)
     end subroutine
 
     subroutine block_conjugate_gradient &
@@ -333,7 +333,7 @@ contains
         implicit none
         double precision, intent(in) :: amat_val(:), amat_diag_inv(:), &
             bvec(:, :)
-        double precision, intent(inout) :: uvec(:,:)
+        double precision, intent(inout) :: uvec(:, :)
         integer, intent(in) :: ndof, nnz, nblock, amat_col(:), amat_ind(:)
 
         double precision :: rvec(nblock, ndof), &
@@ -367,7 +367,7 @@ contains
         iter = 1
 
         print *, "start solving..."
-    
+
         !$acc data copyin(amat_val, amat_col, amat_ind, amat_diag_inv, bvec, uvec) &
         !$acc create(rvec, pvec, qvec, zvec) &
         !$acc copyout(uvec)
@@ -379,7 +379,7 @@ contains
                         bnorm13, bnorm14, bnorm15, bnorm16)
 
         ! q <- A u
-        call spmatvec_block(ndof, nnz, nblock, amat_val, amat_col, amat_ind, uvec, qvec, tmp)  
+        call spmatvec_block(ndof, nnz, nblock, amat_val, amat_col, amat_ind, uvec, qvec, tmp)
 
         ! r <- b - q
         call xpby_block(ndof, nblock, bvec, qvec, rvec, &
@@ -391,7 +391,7 @@ contains
                         rnorm01, rnorm02, rnorm03, rnorm04, &
                         rnorm05, rnorm06, rnorm07, rnorm08, &
                         rnorm09, rnorm10, rnorm11, rnorm12, &
-                        rnorm13, rnorm14, rnorm15, rnorm16) 
+                        rnorm13, rnorm14, rnorm15, rnorm16)
 
         ! calculate err
         call err_block(err, &
@@ -471,7 +471,7 @@ contains
                             rnorm05, rnorm06, rnorm07, rnorm08, &
                             rnorm09, rnorm10, rnorm11, rnorm12, &
                             rnorm13, rnorm14, rnorm15, rnorm16)
-            
+
             call err_block(err, &
                            rnorm01, rnorm02, rnorm03, rnorm04, &
                            rnorm05, rnorm06, rnorm07, rnorm08, &
@@ -484,10 +484,11 @@ contains
 
             iter = iter + 1
 
-            if (iter == 50) then
+            if (iter == 20) then
                 print *, "maxiter reached"
                 exit
             end if
+            ! print *, "iter = ", iter, "err = ", err
         end do
         !$acc end data
         print *, "maxiter = ", iter
@@ -501,7 +502,7 @@ contains
         double precision :: res(nblock, ndof), tmp
 
         !$acc data copyin(uglobal, res, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv) &
-        !$acc create(tmp) &
+        !$acc create(tmp, res) &
         !$acc copyout(res)
         call spmatvec_block(ndof, nnz, nblock, kglobal_val, kglobal_col, kglobal_ind, uglobal, res, tmp)
         !$acc end data
@@ -512,7 +513,10 @@ contains
             end do
         end do
 
+        do iblock = 1, nblock
+            print *, "L2 norm of residual: ", sqrt(sum(res(iblock, :)))
+        end do
         print *, "L2 norm of residual: ", sqrt(sum(res))
-        
+
     end
 end module

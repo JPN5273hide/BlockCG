@@ -47,16 +47,6 @@ function gen_model(ds, xmin, xmax, ymin, ymax, zmin, zmax)
 end
 
 function write(ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
-    cells = [MeshCell(VTKCellTypes.VTK_HEXAHEDRON, cny[:, i]) for i = 1:size(cny, 2)]
-
-    ux = uglobal[1:3:end]
-    uy = uglobal[2:3:end]
-    uz = uglobal[3:3:end]
-    vtk_grid("../data/mesh", coor, cells) do vtk
-        vtk["ux"] = ux
-        vtk["uy"] = uy
-        vtk["uz"] = uz
-    end
 
     writedlm("../data/cny.dat", transpose(cny))
     writedlm("../data/coor.dat", transpose(coor))
@@ -66,7 +56,27 @@ function write(ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_i
     writedlm("../data/kglobal_diag_inv.dat", kglobal_diag_inv)
     writedlm("../data/uinit.dat", transpose(uglobal))
     writedlm("../data/fglobal.dat", transpose(fglobal))
-    writedlm("../data/n.dat", [ndof, nnz, nblock])
+    writedlm("../data/shape.dat", [ndof, nnz, nblock])
+end
+
+function write_mesh()
+    cny = transpose(readdlm("../data/cny.dat", Int))
+    @show size(cny)
+    coor = transpose(readdlm("../data/coor.dat"))
+    uglobal = readdlm("../data/sol.dat")
+    @show size(uglobal)
+
+    cells = [MeshCell(VTKCellTypes.VTK_HEXAHEDRON, cny[:, i]) for i = 1:size(cny, 2)]
+
+    ux = uglobal[1:3:end, 1]
+    uy = uglobal[2:3:end, 1]
+    uz = uglobal[3:3:end, 1]
+    @show size(ux), size(uy), size(uz)
+    vtk_grid("../data/mesh", coor, cells) do vtk
+        vtk["ux"] = ux
+        vtk["uy"] = uy
+        vtk["uz"] = uz
+    end
 end
 
 function spmatvec!(val, col, ind, vec, res)
@@ -357,6 +367,9 @@ function gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, m
     kglobal_tmp_col = [[] for _ in 1:3*nnode]
 
     for ie = 1:nelement
+        if ie % 1000 == 0
+            @show "element ", ie
+        end
         node_id = zeros(Int, 8)
         for inode = 1:8
             node_id[inode] = cny[inode, ie]
@@ -589,13 +602,15 @@ nblock = mblock * mblock
 kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal = gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, mblock)
 
 
-# BlockConjugateGradient!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+BlockConjugateGradient!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
 
-BlockConjugateGradient_diag!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+# BlockConjugateGradient_diag!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
 
-nblock, ndof = size(uglobal)
-nnz = length(kglobal_val)
-write(ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+# nblock, ndof = size(uglobal)
+# nnz = length(kglobal_val)
+# write(ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+
+# write_mesh()
 
 
 # # 正定値行列を作成するための関数
@@ -625,7 +640,7 @@ write(ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglob
 
 # # テスト行列の作成
 # Random.seed!(0)
-# ndof = 200   # 自由度（行列のサイズ）
+# ndof = 100   # 自由度（行列のサイズ）
 # nblock = 16 # ブロック数を16に設定
 
 # # 正定値行列の生成
@@ -642,8 +657,8 @@ write(ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglob
 # # 解ベクトルの初期化
 # uvec = zeros(Float64, nblock, ndof)
 
-# # uvec = uvec[1:16, :]
-# # bvec = bvec[1:16, :]
+# uvec = uvec[1:16, :]
+# bvec = bvec[1:16, :]
 # # BlockConjugateGradient! 関数をテスト
 # BlockConjugateGradient!(amat_val, amat_col, amat_ind, amat_diag_inv, uvec, bvec)
 # uvec .= 0.0
