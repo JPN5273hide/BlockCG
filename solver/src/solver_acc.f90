@@ -364,6 +364,10 @@ contains
         integer :: iblock, iter
 
         ! initialize
+        beta01 = 0d0; beta02 = 0d0; beta03 = 0d0; beta04 = 0d0
+        beta05 = 0d0; beta06 = 0d0; beta07 = 0d0; beta08 = 0d0
+        beta09 = 0d0; beta10 = 0d0; beta11 = 0d0; beta12 = 0d0
+        beta13 = 0d0; beta14 = 0d0; beta15 = 0d0; beta16 = 0d0
         iter = 1
 
         print *, "start solving..."
@@ -484,10 +488,10 @@ contains
 
             iter = iter + 1
 
-            if (iter == 20) then
-                print *, "maxiter reached"
-                exit
-            end if
+            ! if (iter == 20) then
+            !     print *, "maxiter reached"
+            !     exit
+            ! end if
             ! print *, "iter = ", iter, "err = ", err
         end do
         !$acc end data
@@ -499,24 +503,24 @@ contains
         double precision, intent(in) :: kglobal_val(:), kglobal_diag_inv(:), uglobal(:, :), fglobal(:, :)
 
         integer :: iblock, idof
-        double precision :: res(nblock, ndof), tmp
+        double precision :: res(nblock, ndof), tmp, err
 
-        !$acc data copyin(uglobal, res, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv) &
-        !$acc create(tmp, res) &
-        !$acc copyout(res)
+        !$acc data copyin(uglobal, res, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, fglobal) &
+        !$acc create(tmp, res, err) &
+        !$acc copyout(err)
         call spmatvec_block(ndof, nnz, nblock, kglobal_val, kglobal_col, kglobal_ind, uglobal, res, tmp)
-        !$acc end data
 
+        !$acc kernels present(res, fglobal)
+        !$acc loop independent collapse(2) reduction(+:err)
         do idof = 1, ndof
             do iblock = 1, nblock
-                res(iblock, idof) = (res(iblock, idof) - fglobal(iblock, idof))**2
+                err = err + (res(iblock, idof) - fglobal(iblock, idof))**2
             end do
         end do
+        !$acc end kernels
+        !$acc end data
 
-        do iblock = 1, nblock
-            print *, "L2 norm of residual: ", sqrt(sum(res(iblock, :)))
-        end do
-        print *, "L2 norm of residual: ", sqrt(sum(res))
+        print *, "L2 norm of residual: ", sqrt(err)
 
     end
 end module

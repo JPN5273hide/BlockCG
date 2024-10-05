@@ -2,6 +2,8 @@
 FC = mpif90
 # A100
 FLAGS = -O3 -lm -acc -gpu=cc80,cuda11.2,fastmath -Minfo=accel
+# FLAGS = -g -C -traceback -O0 -Minfo=accel
+
 # GH200
 # FLAGS = -O3 -lm -acc -gpu=cc90,cuda12.3,fastmath -Minfo=accel
 

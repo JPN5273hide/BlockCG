@@ -6,9 +6,9 @@ using LinearAlgebra
 function gen_model(ds, xmin, xmax, ymin, ymax, zmin, zmax)
 
     # number of elements in each direction
-    mx = Int((xmax - xmin) / ds)
-    my = Int((ymax - ymin) / ds)
-    mz = Int((zmax - zmin) / ds)
+    mx = Int32((xmax - xmin) / ds)
+    my = Int32((ymax - ymin) / ds)
+    mz = Int32((zmax - zmin) / ds)
 
     # coordinates
     coor = zeros(Float64, 3, (mx + 1) * (my + 1) * (mz + 1))
@@ -24,7 +24,7 @@ function gen_model(ds, xmin, xmax, ymin, ymax, zmin, zmax)
     end
 
     # connectivity
-    cny = zeros(Int, 8, mx * my * mz)
+    cny = zeros(Int32, 8, mx * my * mz)
     for iz = 1:mz
         for iy = 1:my
             for ix = 1:mx
@@ -46,33 +46,47 @@ function gen_model(ds, xmin, xmax, ymin, ymax, zmin, zmax)
     return cny, coor
 end
 
-function write(ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
-
-    writedlm("../data/cny.dat", transpose(cny))
-    writedlm("../data/coor.dat", transpose(coor))
-    writedlm("../data/kglobal_val.dat", kglobal_val)
-    writedlm("../data/kglobal_col.dat", kglobal_col)
-    writedlm("../data/kglobal_ind.dat", kglobal_ind)
-    writedlm("../data/kglobal_diag_inv.dat", kglobal_diag_inv)
-    writedlm("../data/uinit.dat", transpose(uglobal))
-    writedlm("../data/fglobal.dat", transpose(fglobal))
-    writedlm("../data/shape.dat", [ndof, nnz, nblock])
+function write_data(data_dir, ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+    open(joinpath(data_dir, "cny.bin"), "w") do io
+        write(io, cny)
+    end
+    open(joinpath(data_dir, "coor.bin"), "w") do io
+        write(io, coor)
+    end
+    open(joinpath(data_dir, "kglobal_val.bin"), "w") do io
+        write(io, kglobal_val)
+    end
+    open(joinpath(data_dir, "kglobal_col.bin"), "w") do io
+        write(io, kglobal_col)
+    end
+    open(joinpath(data_dir, "kglobal_ind.bin"), "w") do io
+        write(io, kglobal_ind)
+    end
+    open(joinpath(data_dir, "kglobal_diag_inv.bin"), "w") do io
+        write(io, kglobal_diag_inv)
+    end
+    open(joinpath(data_dir, "uinit.bin"), "w") do io
+        write(io, uglobal)
+    end
+    open(joinpath(data_dir, "fglobal.bin"), "w") do io
+        write(io, fglobal)
+    end
+    writedlm(joinpath(data_dir, "shape.dat"), [ndof, nnz, nblock])
 end
 
-function write_mesh()
-    cny = transpose(readdlm("../data/cny.dat", Int))
-    @show size(cny)
-    coor = transpose(readdlm("../data/coor.dat"))
-    uglobal = readdlm("../data/sol.dat")
+function write_mesh(data_dir, nblock)
+    cny = reshape(reinterpret(Int32, read(joinpath(data_dir, "cny.bin"))), (8, :))
+    coor = reshape(reinterpret(Float64, read(joinpath(data_dir, "coor.bin"))), (3, :))
+    uglobal = reshape(reinterpret(Float64, read(joinpath(data_dir, "sol.bin"))), (nblock, :))
     @show size(uglobal)
 
     cells = [MeshCell(VTKCellTypes.VTK_HEXAHEDRON, cny[:, i]) for i = 1:size(cny, 2)]
 
-    ux = uglobal[1:3:end, 1]
-    uy = uglobal[2:3:end, 1]
-    uz = uglobal[3:3:end, 1]
+    ux = uglobal[1, 1:3:end]
+    uy = uglobal[1, 2:3:end]
+    uz = uglobal[1, 3:3:end]
     @show size(ux), size(uy), size(uz)
-    vtk_grid("../data/mesh", coor, cells) do vtk
+    vtk_grid(joinpath(data_dir, "mesh"), coor, cells) do vtk
         vtk["ux"] = ux
         vtk["uy"] = uy
         vtk["uz"] = uz
@@ -370,7 +384,7 @@ function gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, m
         if ie % 1000 == 0
             @show "element ", ie
         end
-        node_id = zeros(Int, 8)
+        node_id = zeros(Int32, 8)
         for inode = 1:8
             node_id[inode] = cny[inode, ie]
         end
@@ -502,9 +516,9 @@ function gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, m
     end
 
     nnz = sum(length, kglobal_tmp_col)
-    kglobal_col = zeros(Int, nnz)
+    kglobal_col = zeros(Int32, nnz)
     kglobal_val = zeros(Float64, nnz)
-    kglobal_ind = zeros(Int, 3 * nnode + 1)
+    kglobal_ind = zeros(Int32, 3 * nnode + 1)
 
     kglobal_ind[1] = 1
     for idof in 1:3*nnode
@@ -586,31 +600,32 @@ function gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, m
 end
 
 
-ds = 0.125
-xmin = 0.0
-xmax = 2.0
-ymin = 0.0
-ymax = 2.0
-zmin = 0.0
-zmax = 4.0
-cny, coor = gen_model(ds, xmin, xmax, ymin, ymax, zmin, zmax)
-
-# # nblock for block conjugate gradient
-# # nblock needs to be square of an integer
+# nblock for block conjugate gradient
+# nblock needs to be square of an integer
 mblock = 4
 nblock = mblock * mblock
-kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal = gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, mblock)
 
+data_dir = "../data/"
+if !isdir(data_dir)
+    mkpath(data_dir)
+end
 
-BlockConjugateGradient!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
-
-# BlockConjugateGradient_diag!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
-
+# ds = 0.03125
+# xmin = 0.0
+# xmax = 2.0
+# ymin = 0.0
+# ymax = 2.0
+# zmin = 0.0
+# zmax = 4.0
+# cny, coor = gen_model(ds, xmin, xmax, ymin, ymax, zmin, zmax)
+# kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal = gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, mblock)
+# # BlockConjugateGradient!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+# # BlockConjugateGradient_diag!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
 # nblock, ndof = size(uglobal)
 # nnz = length(kglobal_val)
-# write(ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+# write_data(data_dir, ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
 
-# write_mesh()
+write_mesh(data_dir, nblock)
 
 
 # # 正定値行列を作成するための関数
