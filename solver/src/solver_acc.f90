@@ -492,7 +492,7 @@ contains
             !     print *, "maxiter reached"
             !     exit
             ! end if
-            ! print *, "iter = ", iter, "err = ", err
+            print *, "iter = ", iter, "err = ", err
         end do
         !$acc end data
         print *, "maxiter = ", iter
