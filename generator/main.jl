@@ -74,6 +74,34 @@ function write_data(data_dir, ndof, nnz, nblock, cny, coor, kglobal_val, kglobal
     writedlm(joinpath(data_dir, "shape.dat"), [ndof, nnz, nblock])
 end
 
+function write_data_bcrs(data_dir, nnode, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+    open(joinpath(data_dir, "cny.bin"), "w") do io
+        write(io, cny)
+    end
+    open(joinpath(data_dir, "coor.bin"), "w") do io
+        write(io, coor)
+    end
+    open(joinpath(data_dir, "kglobal_val.bin"), "w") do io
+        write(io, kglobal_val)
+    end
+    open(joinpath(data_dir, "kglobal_col.bin"), "w") do io
+        write(io, kglobal_col)
+    end
+    open(joinpath(data_dir, "kglobal_ind.bin"), "w") do io
+        write(io, kglobal_ind)
+    end
+    open(joinpath(data_dir, "kglobal_diag_inv.bin"), "w") do io
+        write(io, kglobal_diag_inv)
+    end
+    open(joinpath(data_dir, "uinit.bin"), "w") do io
+        write(io, uglobal)
+    end
+    open(joinpath(data_dir, "fglobal.bin"), "w") do io
+        write(io, fglobal)
+    end
+    writedlm(joinpath(data_dir, "shape.dat"), [nnode, nnz, nblock])
+end
+
 function write_mesh(data_dir, nblock)
     cny = reshape(reinterpret(Int32, read(joinpath(data_dir, "cny.bin"))), (8, :))
     coor = reshape(reinterpret(Float64, read(joinpath(data_dir, "coor.bin"))), (3, :))
@@ -904,6 +932,7 @@ function gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, m
             zt = zmax
             if norm([x, y, z] .- [xt, yt, zt]) < 1.0e-6
                 @show "force at node ", inode
+                @show xt, yt, zt
                 fglobal[iblock, 3*(inode-1)+3] = 1.0
             end
         end
@@ -967,26 +996,30 @@ end
 mblock = 4
 nblock = mblock * mblock
 
-data_dir = "../data___/"
+data_dir = "../bcrs_data/"
 if !isdir(data_dir)
     mkpath(data_dir)
 end
 
-ds = 0.125
+ds = 0.03125
 xmin = 0.0
-xmax = 2.0
+xmax = 4.0
 ymin = 0.0
-ymax = 2.0
+ymax = 4.0
 zmin = 0.0
 zmax = 4.0
 cny, coor = gen_model(ds, xmin, xmax, ymin, ymax, zmin, zmax)
-# kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal = gen_matvec_bcrs(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, mblock)
+kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal = gen_matvec_bcrs(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, mblock)
 # BlockConjugateGradient_diag_bcrs!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
-kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal = gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, mblock)
-BlockConjugateGradient_diag!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+nblock, _, nnode = size(uglobal)
+nnz = length(kglobal_col)
+write_data_bcrs(data_dir, nnode, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
 
+
+# kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal = gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, mblock)
+# BlockConjugateGradient_diag!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
 # nblock, ndof = size(uglobal)
-# nnz = length(kglobal_val)
+# nnz = length(kglobal_col)
 # write_data(data_dir, ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
 
 # write_mesh(data_dir, nblock)
