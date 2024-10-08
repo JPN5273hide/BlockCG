@@ -2,6 +2,9 @@
 !*/
 !generator/main.jl
 !solver/src/*.f90
+!solver/Makefile
+!solver_bcrs/src/*.f90
+!solver_bcrs/Makefile
 !.gitignore
 !Makefile
 !gh200.job

@@ -74,6 +74,34 @@ function write_data(data_dir, ndof, nnz, nblock, cny, coor, kglobal_val, kglobal
     writedlm(joinpath(data_dir, "shape.dat"), [ndof, nnz, nblock])
 end
 
+function write_data_bcrs(data_dir, nnode, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+    open(joinpath(data_dir, "cny.bin"), "w") do io
+        write(io, cny)
+    end
+    open(joinpath(data_dir, "coor.bin"), "w") do io
+        write(io, coor)
+    end
+    open(joinpath(data_dir, "kglobal_val.bin"), "w") do io
+        write(io, kglobal_val)
+    end
+    open(joinpath(data_dir, "kglobal_col.bin"), "w") do io
+        write(io, kglobal_col)
+    end
+    open(joinpath(data_dir, "kglobal_ind.bin"), "w") do io
+        write(io, kglobal_ind)
+    end
+    open(joinpath(data_dir, "kglobal_diag_inv.bin"), "w") do io
+        write(io, kglobal_diag_inv)
+    end
+    open(joinpath(data_dir, "uinit.bin"), "w") do io
+        write(io, uglobal)
+    end
+    open(joinpath(data_dir, "fglobal.bin"), "w") do io
+        write(io, fglobal)
+    end
+    writedlm(joinpath(data_dir, "shape.dat"), [nnode, nnz, nblock])
+end
+
 function write_mesh(data_dir, nblock)
     cny = reshape(reinterpret(Int32, read(joinpath(data_dir, "cny.bin"))), (8, :))
     coor = reshape(reinterpret(Float64, read(joinpath(data_dir, "coor.bin"))), (3, :))
@@ -117,6 +145,24 @@ function spmatvec_block!(val, col, ind, vec, res)
         end
         for iblock in 1:nblock
             res[iblock, i] = tmp[iblock]
+        end
+    end
+end
+
+function spmatvec_block_bcrs!(val, col, ind, vec, res)
+    nblock, _, nnode = size(vec)
+    tmp = zeros(Float64, 3, nblock)
+    for inode in 1:nnode
+        for iblock in 1:nblock
+            tmp[:, iblock] .= 0.0
+        end
+        for j in ind[inode]:ind[inode+1]-1
+            for iblock in 1:nblock
+                tmp[:, iblock] .+= val[:, :, j] * vec[iblock, :, col[j]]
+            end
+        end
+        for iblock in 1:nblock
+            res[iblock, :, inode] .= tmp[:, iblock]
         end
     end
 end
@@ -367,6 +413,359 @@ function BlockConjugateGradient_diag!(amat_val, amat_col, amat_ind, amat_diag_in
     @show "max iter: ", iter
 end
 
+# solve A u = b
+function BlockConjugateGradient_diag_bcrs!(amat_val, amat_col, amat_ind, amat_diag_inv, uvec, bvec)
+    nblock, _, nnode = size(bvec)
+    @show nblock, nnode
+    rvec = zeros(Float64, size(bvec))
+    pvec = zeros(Float64, size(bvec))
+    qvec = zeros(Float64, size(bvec))
+    zvec = zeros(Float64, size(bvec))
+
+    bnorm = zeros(Float64, nblock)
+    rnorm = zeros(Float64, nblock)
+
+    bnorm .= 0.0
+    for iblock in 1:nblock
+        bnorm[iblock] = norm(bvec[iblock, :, :])
+    end
+
+    # initial guess
+    for inode in 1:nnode
+        for iblock in 1:nblock
+            uvec[iblock, :, inode] = amat_diag_inv[:, :, inode] * bvec[iblock, :, inode]
+        end
+    end
+
+    # q <- A u
+    spmatvec_block_bcrs!(amat_val, amat_col, amat_ind, uvec, qvec)
+
+    # r <- b - q
+    rvec .= bvec .- qvec
+    for iblock in 1:nblock
+        rnorm[iblock] = norm(rvec[iblock, :, :])
+    end
+
+    alpha = zeros(Float64, nblock)
+    beta = zeros(Float64, nblock)
+    rho = zeros(Float64, nblock)
+    iter = 1
+    @show (rnorm./bnorm)[1]
+    while maximum(rnorm / bnorm) > 1.0e-8
+        # z <- M^-1 r
+        # for idof in 1:ndof
+        #     for iblock in 1:nblock
+        #         zvec[iblock, idof] = rvec[iblock, idof] * amat_diag_inv[idof]
+        #     end
+        # end
+        for inode in 1:nnode
+            for iblock in 1:nblock
+                zvec[iblock, :, inode] .= amat_diag_inv[:, :, inode] * rvec[iblock, :, inode] 
+            end
+        end
+
+        if iter > 1
+            # beta <- (r, z) / rho
+            for iblock in 1:nblock
+                beta[iblock] = 0.0
+                for inode in 1:nnode
+                    beta[iblock] += dot(rvec[iblock, :, inode], zvec[iblock, :, inode])
+                end
+                beta[iblock] = beta[iblock] / rho[iblock]
+            end
+        end
+
+        # p <- z + beta p
+        for iblock in 1:nblock
+            pvec[iblock, :, :] = zvec[iblock, :, :] .+ beta[iblock] * pvec[iblock, :, :]
+        end
+
+        # q <- A p
+        spmatvec_block_bcrs!(amat_val, amat_col, amat_ind, pvec, qvec)
+
+        # rho <- (r, z)
+        for iblock in 1:nblock
+            rho[iblock] = 0.0
+            for inode in 1:nnode
+                rho[iblock] += dot(rvec[iblock, :, inode], zvec[iblock, :, inode])
+            end
+        end
+
+        # alpha <- rho / (p, q)
+        for iblock in 1:nblock
+            alpha[iblock] = 0.0
+            for inode in 1:nnode
+                alpha[iblock] += dot(pvec[iblock, :, inode], qvec[iblock, :, inode])
+            end
+            alpha[iblock] = rho[iblock] / alpha[iblock]
+        end
+
+        # q <- -alpha q
+        for iblock in 1:nblock
+            qvec[iblock, :, :] .= -alpha[iblock] .* qvec[iblock, :, :]
+        end
+
+        # r <- r + q
+        rvec .= rvec .+ qvec
+
+        # u <- u + alpha p
+        for iblock in 1:nblock
+            uvec[iblock, :, :] .= uvec[iblock, :, :] .+ alpha[iblock] .* pvec[iblock, :, :]
+        end
+
+        rnorm .= 0.0
+        for iblock in 1:nblock
+            rnorm[iblock] = norm(rvec[iblock, :, :])
+        end
+        @show (rnorm./bnorm)[1]
+
+        iter += 1
+    end
+    @show "max iter: ", iter
+end
+function gen_matvec_bcrs(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, mblock)
+    # material properties
+    young = 10.0
+    nyu = 0.3
+    lam = young * nyu / (1.0 + nyu) / (1.0 - 2.0 * nyu)
+    mu = young / 2.0 / (1.0 + nyu)
+
+    nnode = size(coor, 2)
+    nelement = size(cny, 2)
+    kglobal_tmp_val = [[] for _ in 1:nnode]
+    kglobal_tmp_col = [[] for _ in 1:nnode]
+
+    for ie = 1:nelement
+        if ie % 1000 == 0
+            @show "element ", ie
+        end
+        node_id = zeros(Int32, 8)
+        for inode = 1:8
+            node_id[inode] = cny[inode, ie]
+        end
+        xnode = zeros(Float64, 3, 8)
+        for inode = 1:8
+            xnode[1, inode] = coor[1, node_id[inode]]
+            xnode[2, inode] = coor[2, node_id[inode]]
+            xnode[3, inode] = coor[3, node_id[inode]]
+        end
+
+        kelement = zeros(Float64, 24, 24)
+        # gauss quadrature
+        for r1 in [-1.0 / sqrt(3), 1.0 / sqrt(3)]
+            for r2 in [-1.0 / sqrt(3), 1.0 / sqrt(3)]
+                for r3 in [-1.0 / sqrt(3), 1.0 / sqrt(3)]
+                    nvec = zeros(Float64, 8)
+                    nvec[1] = 0.125 * (1.0 - r1) * (1.0 - r2) * (1.0 - r3)
+                    nvec[2] = 0.125 * (1.0 + r1) * (1.0 - r2) * (1.0 - r3)
+                    nvec[3] = 0.125 * (1.0 + r1) * (1.0 + r2) * (1.0 - r3)
+                    nvec[4] = 0.125 * (1.0 - r1) * (1.0 + r2) * (1.0 - r3)
+                    nvec[5] = 0.125 * (1.0 - r1) * (1.0 - r2) * (1.0 + r3)
+                    nvec[6] = 0.125 * (1.0 + r1) * (1.0 - r2) * (1.0 + r3)
+                    nvec[7] = 0.125 * (1.0 + r1) * (1.0 + r2) * (1.0 + r3)
+                    nvec[8] = 0.125 * (1.0 - r1) * (1.0 + r2) * (1.0 + r3)
+
+                    nmat = zeros(Float64, 3, 24)
+                    for inode = 1:8
+                        nmat[1, 3*inode-2] = nvec[inode]
+                        nmat[2, 3*inode-1] = nvec[inode]
+                        nmat[3, 3*inode] = nvec[inode]
+                    end
+
+                    dndr = zeros(Float64, 3, 8)
+                    dndr[1, 1] = -0.125 * (1.0 - r2) * (1.0 - r3)
+                    dndr[1, 2] = 0.125 * (1.0 - r2) * (1.0 - r3)
+                    dndr[1, 3] = 0.125 * (1.0 + r2) * (1.0 - r3)
+                    dndr[1, 4] = -0.125 * (1.0 + r2) * (1.0 - r3)
+                    dndr[1, 5] = -0.125 * (1.0 - r2) * (1.0 + r3)
+                    dndr[1, 6] = 0.125 * (1.0 - r2) * (1.0 + r3)
+                    dndr[1, 7] = 0.125 * (1.0 + r2) * (1.0 + r3)
+                    dndr[1, 8] = -0.125 * (1.0 + r2) * (1.0 + r3)
+
+                    dndr[2, 1] = -0.125 * (1.0 - r1) * (1.0 - r3)
+                    dndr[2, 2] = -0.125 * (1.0 + r1) * (1.0 - r3)
+                    dndr[2, 3] = 0.125 * (1.0 + r1) * (1.0 - r3)
+                    dndr[2, 4] = 0.125 * (1.0 - r1) * (1.0 - r3)
+                    dndr[2, 5] = -0.125 * (1.0 - r1) * (1.0 + r3)
+                    dndr[2, 6] = -0.125 * (1.0 + r1) * (1.0 + r3)
+                    dndr[2, 7] = 0.125 * (1.0 + r1) * (1.0 + r3)
+                    dndr[2, 8] = 0.125 * (1.0 - r1) * (1.0 + r3)
+
+                    dndr[3, 1] = -0.125 * (1.0 - r1) * (1.0 - r2)
+                    dndr[3, 2] = -0.125 * (1.0 + r1) * (1.0 - r2)
+                    dndr[3, 3] = -0.125 * (1.0 + r1) * (1.0 + r2)
+                    dndr[3, 4] = -0.125 * (1.0 - r1) * (1.0 + r2)
+                    dndr[3, 5] = 0.125 * (1.0 - r1) * (1.0 - r2)
+                    dndr[3, 6] = 0.125 * (1.0 + r1) * (1.0 - r2)
+                    dndr[3, 7] = 0.125 * (1.0 + r1) * (1.0 + r2)
+                    dndr[3, 8] = 0.125 * (1.0 - r1) * (1.0 + r2)
+
+                    dxdr = zeros(Float64, 3, 3)
+                    for inode in 1:8
+                        for i in 1:3
+                            for j in 1:3
+                                dxdr[i, j] += dndr[i, inode] * xnode[j, inode]
+                            end
+                        end
+                    end
+                    jac = det(dxdr)
+                    drdx = inv(dxdr)
+
+                    dndx = zeros(Float64, 3, 8)
+                    for inode in 1:8
+                        for i in 1:3
+                            for j in 1:3
+                                dndx[i, inode] += drdx[j, i] * dndr[j, inode]
+                            end
+                        end
+                    end
+
+                    bmat = zeros(Float64, 6, 24)
+                    for inode in 1:8
+                        bmat[1, 3*(inode-1)+1] = dndx[1, inode]
+                        bmat[2, 3*(inode-1)+2] = dndx[2, inode]
+                        bmat[3, 3*(inode-1)+3] = dndx[3, inode]
+                        bmat[4, 3*(inode-1)+1] = dndx[2, inode]
+                        bmat[4, 3*(inode-1)+2] = dndx[1, inode]
+                        bmat[5, 3*(inode-1)+2] = dndx[3, inode]
+                        bmat[5, 3*(inode-1)+3] = dndx[2, inode]
+                        bmat[6, 3*(inode-1)+1] = dndx[3, inode]
+                        bmat[6, 3*(inode-1)+3] = dndx[1, inode]
+                    end
+
+                    dmat = zeros(Float64, 6, 6)
+                    dmat[1, 1] = lam + 2.0 * mu
+                    dmat[2, 2] = lam + 2.0 * mu
+                    dmat[3, 3] = lam + 2.0 * mu
+                    dmat[4, 4] = mu
+                    dmat[5, 5] = mu
+                    dmat[6, 6] = mu
+                    dmat[1, 2] = lam
+                    dmat[1, 3] = lam
+                    dmat[2, 1] = lam
+                    dmat[2, 3] = lam
+                    dmat[3, 1] = lam
+                    dmat[3, 2] = lam
+
+                    kelement .+= transpose(bmat) * dmat * bmat .* jac
+                end
+            end
+        end
+        for inode in 1:8
+            inode_g = node_id[inode]
+            for jnode in 1:8
+                jnode_g = node_id[jnode]
+                knode = findfirst(x -> x == jnode_g, kglobal_tmp_col[inode_g])
+                if isnothing(knode)
+                    push!(kglobal_tmp_col[inode_g], jnode_g)
+                    push!(kglobal_tmp_val[inode_g], kelement[3*(inode-1)+1:3*inode, 3*(jnode-1)+1:3*jnode])
+                else
+                    kglobal_tmp_val[inode_g][knode] .+= kelement[3*(inode-1)+1:3*inode, 3*(jnode-1)+1:3*jnode]
+                end
+            end
+        end
+    end
+
+    nnz = sum(length, kglobal_tmp_col)
+    kglobal_col = zeros(Int32, nnz)
+    kglobal_val = zeros(Float64, 3, 3, nnz)
+    kglobal_ind = zeros(Int32, nnode + 1)
+
+    kglobal_ind[1] = 1
+    for inode in 1:nnode
+        kglobal_ind[inode+1] = kglobal_ind[inode] + length(kglobal_tmp_col[inode])
+        kglobal_col[kglobal_ind[inode]:kglobal_ind[inode+1]-1] = kglobal_tmp_col[inode]
+        for jnode in 1:length(kglobal_tmp_col[inode])
+            kglobal_val[:, :, kglobal_ind[inode]+jnode-1] = kglobal_tmp_val[inode][jnode]
+        end
+    end
+
+    kglobal_diag = zeros(Float64, 3, 3, nnode)
+    kglobal_diag_inv = zeros(Float64, 3, 3, nnode)
+
+    # inpulse force
+    fglobal = zeros(Float64, nblock, 3, nnode)
+    for inode in 1:nnode
+        x, y, z = coor[:, inode]
+        for iblock in 1:nblock
+            iy, ix = divrem(iblock - 1, mblock) .+ 1
+            xt = (xmax - xmin) / mblock * (ix - 0.5)
+            yt = (ymax - ymin) / mblock * (iy - 0.5)
+            zt = zmax
+            if norm([x, y, z] .- [xt, yt, zt]) < 1.0e-6
+                @show "force at node ", inode
+                @show xt, yt, zt
+                fglobal[iblock, 3, inode] = 1.0
+            end
+        end
+    end
+
+    # boundary conditions
+    bcflag = zeros(Bool, nnode)
+    uglobal = zeros(Float64, nblock, 3, nnode)
+    for inode in 1:nnode
+        x, y, z = coor[:, inode]
+        if abs(z - zmin) < 1.0e-6
+            bcflag[inode] = true
+            for iblock in 1:nblock
+                uglobal[iblock, 1, inode] = 0.0
+                uglobal[iblock, 2, inode] = 0.0
+                uglobal[iblock, 3, inode] = 0.0
+            end
+        end
+    end
+
+    for inode in 1:nnode
+        if bcflag[inode]
+            for jnode in 1:length(kglobal_tmp_col[inode])
+                if kglobal_col[kglobal_ind[inode]+jnode-1] == inode
+                    kglobal_val[:, :, kglobal_ind[inode]+jnode-1] .= 0.0
+                    kglobal_val[1, 1, kglobal_ind[inode]+jnode-1] = 1.0
+                    kglobal_val[2, 2, kglobal_ind[inode]+jnode-1] = 1.0
+                    kglobal_val[3, 3, kglobal_ind[inode]+jnode-1] = 1.0
+                    kglobal_diag[:, :, inode] .= 0.0
+                    kglobal_diag[1, 1, inode] = 1.0
+                    kglobal_diag[2, 2, inode] = 1.0
+                    kglobal_diag[3, 3, inode] = 1.0
+                else
+                    kglobal_val[:, :, kglobal_ind[inode]+jnode-1] .= 0.0
+                end
+            end
+            for iblock in 1:nblock
+                fglobal[iblock, :, inode] .= uglobal[iblock, :, inode]
+            end
+        else
+            for jnode in 1:length(kglobal_tmp_col[inode])
+                if bcflag[kglobal_col[kglobal_ind[inode]+jnode-1]]
+                    for iblock in 1:nblock
+                        fglobal[iblock, :, inode] .-= kglobal_val[:, :, kglobal_ind[inode]+jnode-1] * uglobal[iblock, :, kglobal_col[kglobal_ind[inode]+jnode-1]]
+                    end
+                    kglobal_val[:, :, kglobal_ind[inode]+jnode-1] .= 0.0
+                end
+                if (kglobal_col[kglobal_ind[inode]+jnode-1] == inode)
+                    kglobal_diag[:, :, inode] .= kglobal_val[:, :, kglobal_ind[inode]+jnode-1]
+                end
+            end
+        end
+    end
+
+    # for idof in 1:3*nnode
+    #     kglobal_diag_inv[idof] = 1.0 / kglobal_diag[idof]
+    # end
+    for inode in 1:nnode
+        kglobal_diag_inv[:, :, inode] .= inv(kglobal_diag[:, :, inode])
+    end
+
+    # transpose in each block
+    for inz in 1:nnz
+        kglobal_val[:, :, inz] .= transpose(kglobal_val[:, :, inz])
+    end
+    for inode in 1:nnode
+        kglobal_diag[:, :, inode] .= transpose(kglobal_diag[:, :, inode])
+    end 
+
+    return kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal
+end
 
 function gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, mblock)
     # material properties
@@ -542,6 +941,7 @@ function gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, m
             zt = zmax
             if norm([x, y, z] .- [xt, yt, zt]) < 1.0e-6
                 @show "force at node ", inode
+                @show xt, yt, zt
                 fglobal[iblock, 3*(inode-1)+3] = 1.0
             end
         end
@@ -605,27 +1005,33 @@ end
 mblock = 4
 nblock = mblock * mblock
 
-data_dir = "../data/"
+data_dir = "../bcrs_data/"
 if !isdir(data_dir)
     mkpath(data_dir)
 end
 
-# ds = 0.03125
-# xmin = 0.0
-# xmax = 2.0
-# ymin = 0.0
-# ymax = 2.0
-# zmin = 0.0
-# zmax = 4.0
-# cny, coor = gen_model(ds, xmin, xmax, ymin, ymax, zmin, zmax)
+ds = 0.03125
+xmin = 0.0
+xmax = 4.0
+ymin = 0.0
+ymax = 4.0
+zmin = 0.0
+zmax = 4.0
+cny, coor = gen_model(ds, xmin, xmax, ymin, ymax, zmin, zmax)
+kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal = gen_matvec_bcrs(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, mblock)
+# BlockConjugateGradient_diag_bcrs!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+nblock, _, nnode = size(uglobal)
+nnz = length(kglobal_col)
+write_data_bcrs(data_dir, nnode, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+
+
 # kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal = gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, mblock)
-# # BlockConjugateGradient!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
-# # BlockConjugateGradient_diag!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+# BlockConjugateGradient_diag!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
 # nblock, ndof = size(uglobal)
-# nnz = length(kglobal_val)
+# nnz = length(kglobal_col)
 # write_data(data_dir, ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
 
-write_mesh(data_dir, nblock)
+# write_mesh(data_dir, nblock)
 
 
 # # 正定値行列を作成するための関数
