@@ -27,11 +27,11 @@ contains
                     vec2 = vec(iblock, 2, col(j))
                     vec3 = vec(iblock, 3, col(j))
                     tmp1 = tmp1 &
-                           + val(1, 1, j)*vec1 + val(1, 2, j)*vec2 + val(1, 3, j)*vec3
+                           + val(1, 1, j)*vec1 + val(2, 1, j)*vec2 + val(3, 1, j)*vec3
                     tmp2 = tmp2 &
-                           + val(2, 1, j)*vec1 + val(2, 2, j)*vec2 + val(2, 3, j)*vec3
+                           + val(1, 2, j)*vec1 + val(2, 2, j)*vec2 + val(3, 2, j)*vec3
                     tmp3 = tmp3 &
-                           + val(3, 1, j)*vec1 + val(3, 2, j)*vec2 + val(3, 3, j)*vec3
+                           + val(1, 3, j)*vec1 + val(2, 3, j)*vec2 + val(3, 3, j)*vec3
                 end do
                 res(iblock, 1, inode) = tmp1
                 res(iblock, 2, inode) = tmp2
@@ -151,13 +151,13 @@ contains
         do inode = 1, nnode
             do iblock = 1, nblock
                 zvec(iblock, 1, inode) = diag_inv(1, 1, inode)*rvec(iblock, 1, inode) + &
-                                         diag_inv(1, 2, inode)*rvec(iblock, 2, inode) + &
-                                         diag_inv(1, 3, inode)*rvec(iblock, 3, inode)
-                zvec(iblock, 2, inode) = diag_inv(2, 1, inode)*rvec(iblock, 1, inode) + &
+                                         diag_inv(2, 1, inode)*rvec(iblock, 2, inode) + &
+                                         diag_inv(3, 1, inode)*rvec(iblock, 3, inode)
+                zvec(iblock, 2, inode) = diag_inv(1, 2, inode)*rvec(iblock, 1, inode) + &
                                          diag_inv(2, 2, inode)*rvec(iblock, 2, inode) + &
-                                         diag_inv(2, 3, inode)*rvec(iblock, 3, inode)
-                zvec(iblock, 3, inode) = diag_inv(3, 1, inode)*rvec(iblock, 1, inode) + &
-                                         diag_inv(3, 2, inode)*rvec(iblock, 2, inode) + &
+                                         diag_inv(3, 2, inode)*rvec(iblock, 3, inode)
+                zvec(iblock, 3, inode) = diag_inv(1, 3, inode)*rvec(iblock, 1, inode) + &
+                                         diag_inv(2, 3, inode)*rvec(iblock, 2, inode) + &
                                          diag_inv(3, 3, inode)*rvec(iblock, 3, inode)
             end do
         end do
@@ -328,7 +328,7 @@ contains
             ! calculate rnorm
             call norm_block(nnode, nblock, rvec, rnorm)
 
-            ! print *, "iter = ", iter, "err = ", maxval(rnorm/bnorm)
+            print *, "iter = ", iter, "err = ", maxval(rnorm/bnorm)
             iter = iter + 1
         end do
         !$acc end data

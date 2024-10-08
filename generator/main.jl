@@ -694,6 +694,7 @@ function gen_matvec_bcrs(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblo
             zt = zmax
             if norm([x, y, z] .- [xt, yt, zt]) < 1.0e-6
                 @show "force at node ", inode
+                @show xt, yt, zt
                 fglobal[iblock, 3, inode] = 1.0
             end
         end
@@ -754,6 +755,14 @@ function gen_matvec_bcrs(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblo
     for inode in 1:nnode
         kglobal_diag_inv[:, :, inode] .= inv(kglobal_diag[:, :, inode])
     end
+
+    # transpose in each block
+    for inz in 1:nnz
+        kglobal_val[:, :, inz] .= transpose(kglobal_val[:, :, inz])
+    end
+    for inode in 1:nnode
+        kglobal_diag[:, :, inode] .= transpose(kglobal_diag[:, :, inode])
+    end 
 
     return kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal
 end
