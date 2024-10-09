@@ -365,12 +365,17 @@ contains
         integer :: i
 
         double precision :: vec(nblock, 3, nnode), res(nblock, 3, nnode)
+        double precision :: st_time, en_time
 
         vec = 1d0
         !$acc data copyin(val, col, ind, vec) copyout(res)
+        st_time = omp_get_wtime()
         do i = 1, 50
             call spmatvec_block(nnode, nblock, val, col, ind, vec, res)
         end do
+        en_time = omp_get_wtime()
         !$acc end data
+
+        print *, "elapsed time = ", en_time - st_time
     end
 end module
