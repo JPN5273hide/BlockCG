@@ -9,7 +9,7 @@ program main
         uglobal(:, :, :), fglobal(:, :, :)
     integer, allocatable :: kglobal_col(:), kglobal_ind(:)
     character(len=256) :: filepath
-    character(len=*), parameter :: data_dir = "../bcrs_data_/"
+    character(len=*), parameter :: data_dir = "/data6/nakao/BlockCG/bcrs_data_/"
 
     print *, "Reading data..."
     call get_shape(data_dir, nnode, nnz, nblock)
