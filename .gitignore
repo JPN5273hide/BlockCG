@@ -1,6 +1,7 @@
 *
 !*/
 !generator/main.jl
+!generator/roofline.py
 !solver/src/*.f90
 !solver/Makefile
 !solver_bcrs/src/*.f90
