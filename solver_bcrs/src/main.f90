@@ -9,7 +9,7 @@ program main
         uglobal(:, :, :), fglobal(:, :, :)
     integer, allocatable :: kglobal_col(:), kglobal_ind(:)
     character(len=256) :: filepath
-    character(len=*), parameter :: data_dir = "../bcrs_data/"
+    character(len=*), parameter :: data_dir = "../bcrs_data_/"
 
     print *, "Reading data..."
     call get_shape(data_dir, nnode, nnz, nblock)
@@ -18,8 +18,11 @@ program main
     allocate (uglobal(nblock, 3, nnode), fglobal(nblock, 3, nnode))
     call read_data(data_dir, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
 
-    print *, "Solving..."
-    call block_conjugate_gradient(nnode, nnz, nblock, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+    ! print *, "Solving..."
+    ! call block_conjugate_gradient(nnode, nnz, nblock, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+
+    print *, "Kernel profiling..."
+    call kernel_profiling(nnode, 16, kglobal_val, kglobal_col, kglobal_ind, uglobal)
 
     ! print *, "Output data..."
     ! !  open (10, file='../data__/sol.dat', status='replace')

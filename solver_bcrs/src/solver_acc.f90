@@ -2,7 +2,7 @@ module solver_acc
     use omp_lib
     implicit none
     private :: spmatvec_block, norm_block, axpby_block, preconditioner_block, dot_block
-    public :: block_conjugate_gradient, validate
+    public :: block_conjugate_gradient, validate, kernel_profiling
 contains
     subroutine spmatvec_block(nnode, nblock, val, col, ind, vec, res)
         implicit none
@@ -11,11 +11,10 @@ contains
         double precision, intent(inout) :: res(:, :, :)
 
         double precision :: tmp1, tmp2, tmp3, vec1, vec2, vec3
-        integer :: inode, idim, jdim, iblock, j
+        integer :: inode, idim, jdim, iblock, j, colj
 
-        !$acc parallel present(val, col, ind, vec, res)
-        !$acc loop private(tmp1, tmp2, tmp3, vec1, vec2, vec3) &
-        !$acc collapse(2)
+        !$acc kernels present(val, col, ind, vec, res)
+        !$acc loop independent collapse(2) private(tmp1, tmp2, tmp3, vec1, vec2, vec3, colj)
         do inode = 1, nnode
             do iblock = 1, nblock
                 tmp1 = 0d0
@@ -23,9 +22,10 @@ contains
                 tmp3 = 0d0
                 !$acc loop seq
                 do j = ind(inode), ind(inode + 1) - 1
-                    vec1 = vec(iblock, 1, col(j))
-                    vec2 = vec(iblock, 2, col(j))
-                    vec3 = vec(iblock, 3, col(j))
+                    colj = col(j)
+                    vec1 = vec(iblock, 1, colj)
+                    vec2 = vec(iblock, 2, colj)
+                    vec3 = vec(iblock, 3, colj)
                     tmp1 = tmp1 &
                            + val(1, 1, j)*vec1 + val(2, 1, j)*vec2 + val(3, 1, j)*vec3
                     tmp2 = tmp2 &
@@ -38,7 +38,7 @@ contains
                 res(iblock, 3, inode) = tmp3
             end do
         end do
-        !$acc end parallel
+        !$acc end kernels
     end subroutine
 
     subroutine norm_block(nnode, nblock, vec, norm)
@@ -356,5 +356,21 @@ contains
 
         print *, "L2 norm of residual: ", sqrt(sum(res))
 
+    end
+
+    subroutine kernel_profiling(nnode, nblock, val, col, ind, vec_org)
+        implicit none
+        integer, intent(in) :: nblock, nnode, col(:), ind(:)
+        double precision, intent(in) :: val(:, :, :), vec_org(:, :, :)
+        integer :: i
+
+        double precision :: vec(nblock, 3, nnode), res(nblock, 3, nnode)
+
+        vec = 1d0
+        !$acc data copyin(val, col, ind, vec) copyout(res)
+        do i = 1, 50
+            call spmatvec_block(nnode, nblock, val, col, ind, vec, res)
+        end do
+        !$acc end data
     end
 end module
