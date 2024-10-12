@@ -121,6 +121,29 @@ function write_mesh(data_dir, nblock)
     end
 end
 
+# Gram-Schmidt orthogonalization to perform QR decomposition
+function gram_schmidt!(A, tol)
+    nblock, ndof = size(A)
+    v1 = zeros(Float64, ndof)
+    v2 = zeros(Float64, ndof)
+    v3 = zeros(Float64, ndof)
+    
+    for iblock in 1:nblock
+        v1 .= A[iblock, :]
+        v2 .= v1
+        for jblock in 1:iblock-1
+            v3 .= A[jblock, :]
+            v2 .-= dot(v1, v3) * v3
+        end
+        norm_v = norm(v2)
+        if norm_v > tol
+            A[iblock, :] .= v2 / norm_v
+        else
+            A[iblock, :] .= zeros(ndof)
+        end
+    end
+end
+
 function spmatvec!(val, col, ind, vec, res)
     for i in 1:length(ind)-1
         tmp = 0.0
@@ -225,14 +248,15 @@ function ConjugateGradient!(amat_val, amat_col, amat_ind, amat_diag_inv, uvec, b
     end
 end
 
-function pinv_(A)
+function pinv_(A, tol)
     F = svd(A)
-    S_inv = Diagonal(1.0 ./ F.S)
+    S_inv = Diagonal([s > tol ? 1.0 / s : 0.0 for s in F.S])
     return (F.Vt)' * S_inv * (F.U)'
 end
 
-# solve A u = b
+# solve A U = B
 function BlockConjugateGradient!(amat_val, amat_col, amat_ind, amat_diag_inv, uvec, bvec)
+    tol = 1e-8
     nblock, ndof = size(bvec)
     rvec = zeros(Float64, size(bvec))
     pvec = zeros(Float64, size(bvec))
@@ -248,69 +272,91 @@ function BlockConjugateGradient!(amat_val, amat_col, amat_ind, amat_diag_inv, uv
     end
 
     # initial guess
-    for idof in 1:ndof
-        for iblock in 1:nblock
-            uvec[iblock, idof] = bvec[iblock, idof] * amat_diag_inv[idof]
-        end
-    end
+    # for idof in 1:ndof
+    #     for iblock in 1:nblock
+    #         uvec[iblock, idof] = bvec[iblock, idof] * amat_diag_inv[idof]
+    #     end
+    # end
+    uvec .= zeros(Float64, size(bvec))
 
-    # q <- A u
+    # Q <- A U
     spmatvec_block!(amat_val, amat_col, amat_ind, uvec, qvec)
 
-    # r <- b - q
+    # R <- B - Q
     rvec .= bvec .- qvec
     for iblock in 1:nblock
         rnorm[iblock] = norm(rvec[iblock, :])
     end
+    err = maximum(rnorm ./ bnorm)
 
     alpha = zeros(Float64, nblock, nblock)
     beta = zeros(Float64, nblock, nblock)
     rho = zeros(Float64, nblock, nblock)
     iter = 1
     @show rnorm[1] ./ bnorm[1]
-    while maximum(rnorm / bnorm) > 1.0e-8
-        # z <- M^-1 r
+    while err > tol
+        # Z <- M^-1 R
         for idof in 1:ndof
             for iblock in 1:nblock
                 zvec[iblock, idof] = rvec[iblock, idof] * amat_diag_inv[idof]
             end
         end
+        @show sum(abs.(zvec))
 
         if iter > 1
-            # beta <- (r, z) / rho
-            beta .= pinv(rho) * (rvec * transpose(zvec))
+            # beta <- -rho * (Q, Z)
+            beta .= -rho * (qvec * transpose(zvec))
+            @show sum(abs.(beta))
         end
 
-        # p <- z + beta p
+
+        # P <- orth(Z + P beta)
+        # pvec .= transpose(gram_schmidt(transpose(zvec .+ transpose(beta) * pvec)))
         pvec .= zvec .+ transpose(beta) * pvec
+        if iter == 3
+            open("../solver/debug/p.j", "w") do io
+                writedlm(io, vec(pvec))
+            end
+        end 
+        @show sum(abs.(transpose(beta) * pvec))
+        @show sum(abs.(pvec))
+        gram_schmidt!(pvec, tol)
+        @show sum(abs.(pvec))
 
 
-        # q <- A p
+        # Q <- A P
         spmatvec_block!(amat_val, amat_col, amat_ind, pvec, qvec)
+        @show sum(abs.(qvec))
 
-        # rho <- (r, z)
-        rho .= rvec * transpose(zvec)
+        # rho <- (P, Q)^{-1}
+        rho .= pinv_(pvec * transpose(qvec), tol)
+        @show sum(abs.(rho))
 
-        # alpha <- rho / (p, q)
-        alpha .= pinv(pvec * transpose(qvec)) * rho
+        # alpha <- rho * (P, R)
+        alpha .= rho * (pvec * transpose(rvec))
+        @show sum(abs.(alpha))
 
-        # q <- -alpha q
-        qvec .= -transpose(alpha) * qvec
+        # R <- R - Q alpha
+        rvec .= rvec .- transpose(alpha) * qvec
+        @show sum(abs.(rvec))
 
-        # r <- r + q
-        rvec .= rvec .+ qvec
-
-        # u <- u + alpha p
+        # U <- U + P alpha
         uvec .= uvec .+ transpose(alpha) * pvec
+        @show sum(abs.(uvec))
 
-        rnorm .= 0.0
+        rnorm .= [norm(rvec[iblock, :]) for iblock in 1:nblock]
         for iblock in 1:nblock
-            rnorm[iblock] = norm(rvec[iblock, :])
-        end
-        @show rnorm[1] ./ bnorm[1]
-
+            if (rnorm[iblock]/bnorm[iblock] < tol)
+                rnorm[iblock] = 0.0
+                rvec[iblock, :] .= zeros(ndof)
+                qvec[iblock, :] .= zeros(ndof)
+                pvec[iblock, :] .= zeros(ndof)
+            end
+        end 
+        err = maximum(rnorm ./ bnorm)
         iter += 1
-        if (iter > 500)
+        println("iter: ", iter, " err: ", err)
+        if (iter > 5)
             break
         end
     end
@@ -404,7 +450,13 @@ function BlockConjugateGradient_diag!(amat_val, amat_col, amat_ind, amat_diag_in
 
         rnorm .= 0.0
         for iblock in 1:nblock
-            rnorm[iblock] = norm(rvec[iblock, :])
+            rnorm_tmp = norm(rvec[iblock, :])
+            if rnorm_tmp < 1.0e-8
+                rnorm[iblock] = 0.0
+                rvec[iblock, :] .= zeros(Float64, ndof)
+            else
+                rnorm[iblock] = rnorm_tmp
+            end
         end
         @show (rnorm./bnorm)[1]
 
@@ -1010,6 +1062,7 @@ if !isdir(data_dir)
     mkpath(data_dir)
 end
 
+<<<<<<< HEAD
 ds = 0.03125
 xmin = 0.0
 xmax = 4.0
@@ -1030,6 +1083,28 @@ write_data_bcrs(data_dir, nnode, nnz, nblock, cny, coor, kglobal_val, kglobal_co
 # nblock, ndof = size(uglobal)
 # nnz = length(kglobal_col)
 # write_data(data_dir, ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+=======
+# ds = 0.03125
+ds = 0.015625
+xmin = 0.0
+xmax = 2.0
+ymin = 0.0
+ymax = 2.0
+zmin = 0.0
+zmax = 4.0
+cny, coor = gen_model(ds, xmin, xmax, ymin, ymax, zmin, zmax)
+kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal = gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, mblock)
+# BlockConjugateGradient!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+# fglobal_approx = zeros(Float64, nblock, 3 * size(coor, 2))
+# spmatvec_block!(kglobal_val, kglobal_col, kglobal_ind, uglobal, fglobal_approx)
+# println("residual: ", norm(fglobal .- fglobal_approx))
+
+# BlockConjugateGradient_diag!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+
+nblock, ndof = size(uglobal)
+nnz = length(kglobal_val)
+write_data(data_dir, ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+>>>>>>> f16e1f2c5dbb66ec9952fe745251bd8b49ccf6ee
 
 # write_mesh(data_dir, nblock)
 
@@ -1038,6 +1113,15 @@ write_data_bcrs(data_dir, nnode, nnz, nblock, cny, coor, kglobal_val, kglobal_co
 # function generate_positive_definite_matrix(ndof)
 #     A = randn(ndof, ndof)  # ランダムな行列を生成
 #     return A' * A           # A^T * A で正定値行列を作成
+#     # A = zeros(Float64, ndof, ndof)
+#     # for i in 1:ndof
+#     #     A[i, i] = 2.0
+#     #     if i > 1
+#     #         A[i, i-1] = -1.0
+#     #         A[i-1, i] = -1.0
+#     #     end
+#     # end
+#     # return A
 # end
 
 # # 正定値行列をCRS形式に変換する関数
@@ -1061,11 +1145,16 @@ write_data_bcrs(data_dir, nnode, nnz, nblock, cny, coor, kglobal_val, kglobal_co
 
 # # テスト行列の作成
 # Random.seed!(0)
-# ndof = 100   # 自由度（行列のサイズ）
+# ndof = 200   # 自由度（行列のサイズ）
 # nblock = 16 # ブロック数を16に設定
 
 # # 正定値行列の生成
 # A = generate_positive_definite_matrix(ndof)
+
+# # # Aの固有値をすべて求める
+# # eigenvalues = eigvals(A)
+# # println("固有値: ", eigenvalues)
+
 # amat_val, amat_col, amat_ind = convert_to_crs(A)
 
 # # 対角成分の逆数を計算（前処理用）
@@ -1078,8 +1167,6 @@ write_data_bcrs(data_dir, nnode, nnz, nblock, cny, coor, kglobal_val, kglobal_co
 # # 解ベクトルの初期化
 # uvec = zeros(Float64, nblock, ndof)
 
-# uvec = uvec[1:16, :]
-# bvec = bvec[1:16, :]
 # # BlockConjugateGradient! 関数をテスト
 # BlockConjugateGradient!(amat_val, amat_col, amat_ind, amat_diag_inv, uvec, bvec)
 # uvec .= 0.0

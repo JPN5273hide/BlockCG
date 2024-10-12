@@ -1,6 +1,7 @@
 program main
     use openacc
-    use solver_acc
+    use solver_acc_breakfree
+    ! use solver_acc
     implicit none
 
     integer :: ndof, nnz, nblock, idof, iblock
@@ -8,7 +9,7 @@ program main
         uglobal(:, :), fglobal(:, :)
     integer, allocatable :: kglobal_col(:), kglobal_ind(:)
     character(len=256) :: filepath
-    character(len=*), parameter :: data_dir = "../data_/"
+    character(len=*), parameter :: data_dir = "../data__/"
 
     print *, "Reading data..."
     call get_ndof_nnz_nblock(data_dir, ndof, nnz, nblock)
@@ -21,21 +22,22 @@ program main
     call block_conjugate_gradient(ndof, nnz, nblock, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
 
     print *, "Output data..."
-    !  open (10, file='../data__/sol.dat', status='replace')
-    !  do idof = 1, ndof
-    !      do iblock = 1, nblock
-    !          write (10, "(e20.10)", advance="no") uglobal(iblock, idof)
-    !      end do
-    !      write (10, *)
-    !  end do
+    ! filepath = trim(data_dir)//'sol.dat'
+    ! open (10, file=filepath, status='replace')
+    ! do idof = 1, ndof
+    !     do iblock = 1, nblock
+    !         write (10, "(e20.10)", advance="no") uglobal(iblock, idof)
+    !     end do
+    !     write (10, *)
+    ! end do
 
     filepath = trim(data_dir)//'sol.bin'
     open (10, file=filepath, status='replace', form='unformatted', access='stream')
     write (10) uglobal
     close (10)
 
-    print *, "Validation..."
-    call validate(ndof, nnz, nblock, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
+    ! print *, "Validation..."
+    ! call validate(ndof, nnz, nblock, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
 
 contains
 

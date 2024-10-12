@@ -1,11 +1,11 @@
 # Compiler and flags
 FC = mpif90
 # A100
-FLAGS = -O3 -lm -acc -gpu=cc80,cuda11.2,fastmath -Minfo=accel
-# FLAGS = -g -C -traceback -O0 -Minfo=accel
+FLAGS = -O3 -lm -llapack -acc -gpu=cc80,cuda11.2,fastmath -Minfo=accel
+# FLAGS = -g -C -llapack -traceback -O0 -Minfo=accel
 
 # GH200
-# FLAGS = -O3 -lm -acc -gpu=cc90,cuda12.3,fastmath -Minfo=accel
+# FLAGS = -O3 -lm -llapack -acc -gpu=cc90,cuda12.3,fastmath -Minfo=accel
 
 # Source and object files
 SRC = $(wildcard src/*.f90)
@@ -26,10 +26,13 @@ $(TARGET): $(OBJ)
 build/solver.o: src/solver.f90 | build
 	$(FC) $(FLAGS) -c $< -o $@
 
-build/solver_acc.o: src/solver_acc.f90 | build
+#build/solver_acc.o: src/solver_acc.f90 | build
+#	$(FC) $(FLAGS) -c $< -o $@
+
+build/solver_acc_breakfree.o: src/solver_acc_breakfree.f90 | build
 	$(FC) $(FLAGS) -c $< -o $@
 
-build/main.o: src/main.f90 build/solver.o build/solver_acc.o | build
+build/main.o: src/main.f90 build/solver.o build/solver_acc_breakfree.o | build
 	$(FC) $(FLAGS) -c $< -o $@
 
 # Rule to create the build directory if it doesn't exist
