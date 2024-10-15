@@ -29,10 +29,10 @@ build/solver.o: src/solver.f90 | build
 #build/solver_acc.o: src/solver_acc.f90 | build
 #	$(FC) $(FLAGS) -c $< -o $@
 
-build/solver_acc_breakfree.o: src/solver_acc_breakfree.f90 | build
+build/solver_acc_blockcg.o: src/solver_acc_blockcg.f90 | build
 	$(FC) $(FLAGS) -c $< -o $@
 
-build/main.o: src/main.f90 build/solver.o build/solver_acc_breakfree.o | build
+build/main.o: src/main.f90 build/solver.o build/solver_acc_blockcg.o | build
 	$(FC) $(FLAGS) -c $< -o $@
 
 # Rule to create the build directory if it doesn't exist

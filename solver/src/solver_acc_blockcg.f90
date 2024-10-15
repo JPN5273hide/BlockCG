@@ -799,7 +799,7 @@ contains
         integer :: idof, iblock, jblock, kblock, iter, max_iter
 
         tol = 1d-8
-        max_iter = 20
+        max_iter = 100000
 
         !$acc data copyin(amat_val, amat_col, amat_ind, amat_diag_inv, bvec) &
         !$acc create(uvec, rvec, pvec, qvec, zvec) &
@@ -850,15 +850,16 @@ contains
             !$acc end kernels
 
             if (iter > 1) then
-                ! TODO: beta <- rho^-1 * (R, Z)
+                ! beta <- rho^-1 * (R, Z)
                 call pinv(nblock, rho, tol)
                 call dot(ndof, nblock, rvec, zvec, tmp_bb)
                 do iblock = 1, nblock
                     do jblock = 1, nblock
                         tmp = 0d0
                         do kblock = 1, nblock
-                            tmp = tmp - rho(iblock, kblock)*tmp_bb(kblock, jblock)
+                            tmp = tmp + rho(iblock, kblock)*tmp_bb(kblock, jblock)
                         end do
+                        beta(iblock, jblock) = tmp
                     end do
                 end do
                 
@@ -893,7 +894,7 @@ contains
                 do jblock = 1, nblock
                     tmp = 0d0
                     do kblock = 1, nblock
-                        tmp = tmp + tmp_bb(iblock, kblock)*rho(iblock, jblock)
+                        tmp = tmp + tmp_bb(iblock, kblock)*rho(kblock, jblock)
                     end do
                     alpha(iblock, jblock) = tmp
                 end do
@@ -941,6 +942,7 @@ contains
             end if
         end do
         !$acc end data
+        print *, "iter = ", iter, "err = ", err
     end subroutine
 
     subroutine validate(ndof, nnz, nblock, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)

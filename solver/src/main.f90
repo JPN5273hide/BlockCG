@@ -9,7 +9,7 @@ program main
         uglobal(:, :), fglobal(:, :)
     integer, allocatable :: kglobal_col(:), kglobal_ind(:)
     character(len=256) :: filepath
-    character(len=*), parameter :: data_dir = "../data__/"
+    character(len=*), parameter :: data_dir = "/data6/nakao/BlockCG/data_/"
 
     print *, "Reading data..."
     call get_ndof_nnz_nblock(data_dir, ndof, nnz, nblock)

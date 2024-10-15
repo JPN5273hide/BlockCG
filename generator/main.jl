@@ -1054,7 +1054,7 @@ end
 
 # nblock for block conjugate gradient
 # nblock needs to be square of an integer
-mblock = 4
+mblock = 2
 nblock = mblock * mblock
 
 data_dir = "../bcrs_data/"
@@ -1062,28 +1062,6 @@ if !isdir(data_dir)
     mkpath(data_dir)
 end
 
-<<<<<<< HEAD
-ds = 0.03125
-xmin = 0.0
-xmax = 4.0
-ymin = 0.0
-ymax = 4.0
-zmin = 0.0
-zmax = 4.0
-cny, coor = gen_model(ds, xmin, xmax, ymin, ymax, zmin, zmax)
-kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal = gen_matvec_bcrs(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, mblock)
-# BlockConjugateGradient_diag_bcrs!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
-nblock, _, nnode = size(uglobal)
-nnz = length(kglobal_col)
-write_data_bcrs(data_dir, nnode, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
-
-
-# kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal = gen_matvec(cny, coor, ds, xmin, xmax, ymin, ymax, zmin, zmax, nblock, mblock)
-# BlockConjugateGradient_diag!(kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
-# nblock, ndof = size(uglobal)
-# nnz = length(kglobal_col)
-# write_data(data_dir, ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
-=======
 # ds = 0.03125
 ds = 0.015625
 xmin = 0.0
@@ -1104,7 +1082,6 @@ kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal = gen_
 nblock, ndof = size(uglobal)
 nnz = length(kglobal_val)
 write_data(data_dir, ndof, nnz, nblock, cny, coor, kglobal_val, kglobal_col, kglobal_ind, kglobal_diag_inv, uglobal, fglobal)
->>>>>>> f16e1f2c5dbb66ec9952fe745251bd8b49ccf6ee
 
 # write_mesh(data_dir, nblock)
 
